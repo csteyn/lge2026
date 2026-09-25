@@ -1,0 +1,64 @@
+---
+title: "Who will run each Western Cape council?"
+---
+
+{{< include _ledger.md >}}
+
+```{r}
+source("_common.R")
+n_councils <- nrow(council_meta)
+hung <- control |> filter(outcome == "No majority") |> filter(prob > 0.5) |> nrow()
+```
+
+::: {.lead}
+Probabilities for all `r n_councils` councils, from `r format(meta$n_draws, big.mark = " ")` simulated elections each. The forecast is built in the open: every assumption, data problem and correction is published alongside it, and the code reproduces every number on this site.
+:::
+
+In `r hung` of `r n_councils` councils, no party wins a majority in most simulations.
+
+## Council control
+
+```{r}
+#| fig-height: !expr max(3, 0.32 * nrow(council_meta) + 1.2)
+ctl <- control |>
+  left_join(municipalities, by = "muni_code") |>
+  mutate(outcome_party = str_remove(outcome, " majority$"),
+         outcome_party = if_else(outcome == "No majority", "No majority", outcome_party))
+order <- ctl |> filter(outcome == "No majority") |> select(muni_code, p_hung = prob)
+ctl <- ctl |> left_join(order, by = "muni_code") |>
+  mutate(p_hung = coalesce(p_hung, 0), muni_name = fct_reorder(muni_name, p_hung))
+cols <- party_colours(setdiff(ctl$outcome_party, "No majority"))
+
+ggplot(ctl, aes(prob, muni_name, fill = outcome_party)) +
+  geom_col(width = 0.72) +
+  scale_x_continuous(labels = \(x) pct(x), expand = expansion(mult = c(0, 0.03))) +
+  scale_fill_manual(values = cols, name = NULL,
+                    labels = \(x) if_else(x == "No majority", x, paste(x, "majority"))) +
+  labs(x = "Share of simulations", y = NULL) +
+  theme_lge()
+```
+
+Grey is a hung council: coalition arithmetic takes over, and each municipality's page lists which combinations reach a majority.
+
+## Every council
+
+```{r}
+largest <- seat_summary |> slice_max(p_largest, n = 1, by = muni_code, with_ties = FALSE)
+top_outcome <- control |> slice_max(prob, n = 1, by = muni_code, with_ties = FALSE)
+council_meta |>
+  left_join(municipalities, by = "muni_code") |>
+  left_join(select(top_outcome, muni_code, outcome, prob), by = "muni_code") |>
+  left_join(select(largest, muni_code, party, p_largest), by = "muni_code") |>
+  transmute(
+    Municipality = sprintf("[%s](m/%s.qmd)", muni_name, muni_code),
+    `Most likely outcome` = sprintf("%s (%s)", outcome, pct_clip(prob)),
+    `Most likely largest party` = sprintf("%s (%s)", party, pct_clip(p_largest)),
+    Seats = if_else(str_detect(coalesce(seats_source, ""), "DERIVED"),
+                    paste0(total_seats, " (unverified)"), as.character(total_seats))
+  ) |>
+  knitr::kable()
+```
+
+## How to read this
+
+A probability of 70% means that, across thousands of simulated elections with realistic noise, that outcome happened in seven of every ten. It will fail to happen three times in ten, and the forecast is only good if that is true in practice. [How the forecast will be scored](scoring.qmd) was committed before election day.

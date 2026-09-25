@@ -1,0 +1,26 @@
+data/raw/
+data/fetch_log.csv
+_targets/
+site/_site/
+site/.quarto/
+site/_ledger.md
+site/m/*.qmd
+site/methodology.qmd
+site/log.qmd
+site/corrections.qmd
+site/scoring.qmd
+site/sources.qmd
+.Rhistory
+.Rproj.user/
+renv/library/
+
+# Forecast outputs are held back until publication is decided (MODEL-LOG L029).
+# To publish: delete the next two lines, commit outputs/, and enable the push
+# trigger in .github/workflows/site.yml.
+outputs/public/
+outputs/archive/
+.Rproj.user
+.RData
+.httr-oauth
+.DS_Store
+.quarto

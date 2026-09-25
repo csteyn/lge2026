@@ -1,0 +1,5 @@
+# Optional evidence-based shifts on the log-share scale, added on top of the
+# 2024-based baseline. scope = "province" or a muni_code. Empty = no shift,
+# with the default spread from config.yml. Every row needs a source.
+# Example: DA,province,-0.05,0.10,"Ipsos Jun-Jul 2026 WC vs 2024 NPE",2026-09-24
+party,scope,mean,sd,source,date_added

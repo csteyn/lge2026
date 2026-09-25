@@ -1,0 +1,64 @@
+/*-- scss:defaults --*/
+@import url('https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Literata:opsz,wght@7..72,400;7..72,600&display=swap');
+
+$ink:    #1E2B33;
+$paper:  #F3F5F4;
+$rule:   #CCD5D2;
+$link:   #2F5A6B;
+$flag:   #A6621B;
+$band:   #9FB3BC;
+
+$body-bg: $paper;
+$body-color: $ink;
+$link-color: $link;
+$font-family-sans-serif: "Literata", Georgia, "Times New Roman", serif;
+$headings-font-family: "Atkinson Hyperlegible", "Segoe UI", Arial, sans-serif;
+$headings-font-weight: 700;
+$font-size-root: 17px;
+$line-height-base: 1.65;
+$navbar-bg: $ink;
+$navbar-fg: $paper;
+$navbar-hl: #FFFFFF;
+$footer-bg: $paper;
+$border-color: $rule;
+$code-color: $ink;
+
+/*-- scss:rules --*/
+main.content { max-width: 72ch; }
+main.content .column-page, main.content .cell-output-display { max-width: none; }
+
+h1.title { font-size: 2.1rem; letter-spacing: -0.01em; line-height: 1.15; }
+h2 { margin-top: 2.2rem; font-size: 1.35rem; }
+h3 { font-size: 1.1rem; }
+
+table, .table, .navbar, .ledger, .menu-text, .sidebar, figcaption, .quarto-title-meta {
+  font-family: "Atkinson Hyperlegible", "Segoe UI", Arial, sans-serif;
+}
+.table { font-size: 0.9rem; }
+.table > thead { border-bottom: 2px solid $ink; }
+.table td, .table th { border-color: $rule; }
+
+/* The run ledger: the one piece of chrome that is always visible */
+.ledger {
+  display: flex; flex-wrap: wrap; gap: 0.35rem 1.4rem;
+  font-size: 0.82rem; color: lighten($ink, 18%);
+  padding: 0.55rem 0 0.6rem; margin: 0 0 1.6rem;
+  border-top: 1px solid $rule; border-bottom: 1px solid $rule;
+}
+.ledger p { margin: 0; display: contents; }
+.ledger a { color: $flag; text-decoration-thickness: 1px; text-underline-offset: 2px; }
+.ledger code { color: inherit; background: none; padding: 0; font-size: 0.95em; }
+
+.demo-banner {
+  background: $flag; color: #FFFFFF; padding: 0.7rem 1rem; margin: 0 0 1rem;
+  font-family: "Atkinson Hyperlegible", Arial, sans-serif; font-size: 0.95rem;
+}
+.demo-banner p { margin: 0; }
+
+.lead { font-size: 1.15rem; line-height: 1.55; }
+.status-fail { color: #9B2226; font-weight: 700; }
+.status-warn { color: $flag; font-weight: 700; }
+.status-pass { color: lighten($ink, 25%); }
+
+a:focus-visible { outline: 2px solid $flag; outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }

@@ -1,0 +1,15 @@
+---
+title: "Data downloads"
+---
+
+{{< include _ledger.md >}}
+
+Every number on this site comes from these files, which the pipeline writes on each run. They are licensed CC BY 4.0. Raw source data is not redistributed; [the sources page](sources.qmd) says where each file comes from, and `data/manifest.csv` in the repository records the SHA-256 of every input.
+
+```{r}
+#| results: asis
+files <- list.files(file.path("..", "outputs", "public"))
+cat(paste0("- `", files, "`"), sep = "\n")
+```
+
+Past runs are kept in `outputs/archive/` so any earlier forecast can be compared with the current one.

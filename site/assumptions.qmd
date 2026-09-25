@@ -1,0 +1,44 @@
+---
+title: "Assumptions"
+---
+
+{{< include _ledger.md >}}
+
+Every judgement the forecast rests on, what would happen if it were wrong, and whether it has been tested. An assumption is closed only when evidence is logged against it in the [model log](log.qmd).
+
+```{r}
+source("_common.R")
+rd("assumptions.csv") |>
+  transmute(ID = id, Assumption = assumption, `Why` = why, `Effect if wrong` = effect_if_wrong,
+            Status = status, Logged = logged) |>
+  knitr::kable()
+```
+
+## Parties with no fitted translation
+
+Some parties did not stand in both the 2019 national and 2021 local elections, so the model cannot learn how their local support differs from their national support. For them, that difference (the local premium) is treated as unknown and drawn afresh in every simulation.
+
+```{r}
+if (file.exists(pub("local_premium.csv"))) {
+  rd("local_premium.csv") |>
+    transmute(Party = group, `Premium (mean)` = round(post_mean, 2), `Premium (sd)` = round(post_sd, 2),
+              `By-election estimate` = case_when(
+                is.na(theta) ~ "",
+                is.na(se) ~ sprintf("%.2f (%d ward%s, too few to use)", theta, wards, if_else(wards == 1, "", "s")),
+                TRUE ~ sprintf("%.2f &plusmn; %.2f", theta, se)),
+              Source = source) |>
+    knitr::kable()
+}
+```
+
+The premium is on the model's log-ratio scale: 0 means a party's local support matches its 2024 national-ballot support relative to the other parties; +0.2 means roughly 20% more. It is estimated from by-elections held since the 2024 national election. In each voting district where the party stood, its vote relative to the parties with a fitted translation is compared with what that district's 2024 vote predicts. The comparison is averaged within each ward, then across wards, and combined with the prior by precision.
+
+```{r}
+#| results: asis
+if (file.exists(pub("byelection_placebo.csv"))) {
+  cat("**Placebo check.** The same estimate for parties whose translation is already fitted should be close to zero. Larger deviations would mean by-elections are distorted for everyone, and that uncertainty is added to the estimate.\n\n")
+  rd("byelection_placebo.csv") |>
+    transmute(Party = party, Wards = wards, `Estimate` = sprintf("%.2f &plusmn; %.2f", mean, se)) |>
+    knitr::kable() |> print()
+}
+```

@@ -1,0 +1,31 @@
+---
+title: "Data and model checks"
+---
+
+{{< include _ledger.md >}}
+
+Run automatically on every build. A check reports what it found and how much it affects; it never silently repairs anything. Failures are shown here and on the affected municipality pages.
+
+```{r}
+source("_common.R")
+rd("checks.csv") |>
+  mutate(Status = sprintf('<span class="status-%s">%s</span>', status, status)) |>
+  transmute(ID = id, Area = area, Check = description, Affected = n_affected, Detail = detail,
+            Severity = severity, Status) |>
+  knitr::kable(escape = FALSE)
+```
+
+## Human confirmations
+
+Some things only local knowledge can settle, such as whether a party that no longer appears on a ballot has folded or changed its name. Those judgements are recorded here with their evidence. A disputed item stays flagged until its sources agree.
+
+```{r}
+if (file.exists(pub("party_status.csv"))) {
+  rd("party_status.csv") |>
+    transmute(Council = muni_code, Party = party, Status = status, `2026 name` = name_2026,
+              Evidence = evidence, Source = source, Date = date) |>
+    knitr::kable()
+} else {
+  cat("No confirmations recorded yet.")
+}
+```

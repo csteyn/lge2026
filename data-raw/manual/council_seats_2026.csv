@@ -1,0 +1,30 @@
+# Council sizes for 2026, from each provincial MEC's section 12 notice,
+# (Provincial Gazette). Leave total_seats blank until confirmed: the pipeline,,
+# then derives 2 x wards," marks it ""DERIVED (unverified)""", and check C07 FAILS
+# so the site shows the figure is not yet trustworthy.,,
+muni_code,total_seats,seats_source
+CPT,235,WC Provincial Gazette Extraordinary No. 8999 (PN 116/2024)
+WC011,15,WC Provincial Gazette Extraordinary No. 8999 (PN 116/2024)
+WC012,11,WC Provincial Gazette Extraordinary No. 8999 (PN 116/2024)
+WC013,13,WC Provincial Gazette Extraordinary No. 8999 (PN 116/2024)
+WC014,31,WC Provincial Gazette Extraordinary No. 8999 (PN 116/2024)
+WC015,23,WC Provincial Gazette Extraordinary No. 8999 (PN 116/2024)
+WC022,23,WC Provincial Gazette Extraordinary No. 8999 (PN 116/2024)
+WC023,65,WC Provincial Gazette Extraordinary No. 8999 (PN 116/2024)
+WC024,45,WC Provincial Gazette Extraordinary No. 8999 (PN 116/2024)
+WC025,41,WC Provincial Gazette Extraordinary No. 8999 (PN 116/2024)
+WC026,23,WC Provincial Gazette Extraordinary No. 8999 (PN 116/2024)
+WC031,27,WC Provincial Gazette Extraordinary No. 8999 (PN 116/2024)
+WC032,29,WC Provincial Gazette Extraordinary No. 8999 (PN 116/2024)
+WC033,11,WC Provincial Gazette Extraordinary No. 8999 (PN 116/2024)
+WC034,11,WC Provincial Gazette Extraordinary No. 8999 (PN 116/2024)
+WC041,10,WC Provincial Gazette Extraordinary No. 8999 (PN 116/2024)
+WC042,17,WC Provincial Gazette Extraordinary No. 8999 (PN 116/2024)
+WC043,33,WC Provincial Gazette Extraordinary No. 8999 (PN 116/2024)
+WC044,55,WC Provincial Gazette Extraordinary No. 8999 (PN 116/2024)
+WC045,25,WC Provincial Gazette Extraordinary No. 8999 (PN 116/2024)
+WC047,13,WC Provincial Gazette Extraordinary No. 8999 (PN 116/2024)
+WC048,21,WC Provincial Gazette Extraordinary No. 8999 (PN 116/2024)
+WC051,10,WC Provincial Gazette Extraordinary No. 8999 (PN 116/2024)
+WC052,10,WC Provincial Gazette Extraordinary No. 8999 (PN 116/2024)
+WC053,13,WC Provincial Gazette Extraordinary No. 8999 (PN 116/2024)

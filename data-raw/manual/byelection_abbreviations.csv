@@ -1,0 +1,19 @@
+# The IEC by-election dashboard names parties by abbreviation; results files
+# use full names. Only mappings we are sure of are listed; an unlisted
+# abbreviation is simply not used by the local-premium estimate.
+abbr,party,source
+DA,DEMOCRATIC ALLIANCE,standard abbreviation
+ANC,AFRICAN NATIONAL CONGRESS,standard abbreviation
+EFF,ECONOMIC FREEDOM FIGHTERS,standard abbreviation
+PA,PATRIOTIC ALLIANCE,standard abbreviation
+GOOD,GOOD,identical
+ACDP,AFRICAN CHRISTIAN DEMOCRATIC PARTY,standard abbreviation
+VF PLUS,VRYHEIDSFRONT PLUS,standard abbreviation
+M.K.,UMKHONTO WESIZWE,standard abbreviation (2024 results name)
+ALJAMA,AL JAMA-AH,standard abbreviation
+ATM,AFRICAN TRANSFORMATION MOVEMENT,standard abbreviation
+PMC,PEOPLE'S MOVEMENT FOR CHANGE,standard abbreviation
+PAC,PAN AFRICANIST CONGRESS OF AZANIA,standard abbreviation
+UDM,UNITED DEMOCRATIC MOVEMENT,standard abbreviation
+CCC,CAPE COLOURED CONGRESS,standard abbreviation
+ICOSA,INDEPENDENT CIVIC ORGANISATION OF SOUTH AFRICA,standard abbreviation

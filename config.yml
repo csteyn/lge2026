@@ -1,0 +1,62 @@
+# lge2026 configuration. Every modelling number here is a JUDGEMENT unless a
+# comment says otherwise; they are listed on the site's assumptions page.
+
+mode: live   # demo = synthetic data, fictional parties; live = real IEC/MDB data
+
+collect:     # collection scope (live mode): national from the start
+  provinces: [EC, FS, GP, KZN, LP, MP, NC, NW, WC]
+
+model:
+  version: "v0.1"
+  provinces: [WC]            # which provinces are simulated (live mode)
+  n_draws: 2000
+  seed: 20261104
+  parties_min_share: 0.01    # below this in both 2021 LGE and 2024 NPE -> pooled as OTHER
+  max_parties_per_muni: 10
+  transfer_min_vds: 30       # fewer paired VDs -> default transfer a = 0, b = 1
+  coalition_max_parties: 10  # 2^10 subsets per draw
+  # Local premium of parties with no fitted transfer, from by-elections (L023).
+  # Only by-elections after the 2024 national election: earlier ones predate
+  # the 2024 baseline, and the placebo parties show a systematic drift there.
+  byelection_since: "2024-05-29"
+  byelection_min_wards: 3
+  sd:                        # shocks on the log-share scale (A02)
+    province_party: 0.55
+    muni_party: 0.45
+    ward_party: null         # null = estimated from 2019 -> 2021 residuals
+    vd_party: null
+    turnout_province: 0.15   # logit scale
+    turnout_municipality: 0.12
+    turnout_vd: 0.15
+
+backtest:
+  n_draws: 1000             # the two headline runs
+  grid_draws: 400           # each of the 24 pre-registered settings (L027)
+
+publish:
+  provinces: [WC]
+
+# Published totals the geography must reproduce (check C11). Source: IEC
+# Western Cape briefings reported by IOL, 15 and 23 Sep 2026. Candidate
+# totals: IOL, 23 Sep 2026 (checks C16).
+expected:
+  WC: {wards: 416, voting_districts: 1623, candidates_pr: 4502, candidates_ward: 9847}
+
+iec:
+  # Election ids are opaque and differ per ballot; a wrong id silently returns
+  # a DIFFERENT election (Johannesburg DATA-QUALITY item 8).
+  lge_ids: {"2016": 402, "2021": 1091}
+  npe_ids:
+    "2019": {national: 699, provincial: 827}
+    "2024": {national: 1334, provincial: 1335}
+  lge_reports:               # report name (exact) -> extension
+    "Downloadable Party Results": csv
+    "Seat Calculation Detail": xls
+    "Detailed Results": pdf
+
+mdb:
+  arcgis_base: https://services7.arcgis.com/oeoyTUJC8HEeYsRB/arcgis/rest/services
+  layers:
+    wards2026: MDBWards2026
+    vds2026: VotingDistricts2026_Final
+    wards2020: SA_Wards2020

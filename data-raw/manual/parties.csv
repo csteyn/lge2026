@@ -1,0 +1,12 @@
+# Chart colours. Only colours we are confident of are filled in; blank means
+# "not yet sourced" and a neutral fallback palette is used. Please supply
+# official colours with a source rather than guessing.
+party,short,colour,colour_source
+AFRICAN NATIONAL CONGRESS,ANC,#009A49,widely used party green
+DEMOCRATIC ALLIANCE,DA,#005BA6,widely used party blue
+ECONOMIC FREEDOM FIGHTERS,EFF,#C8102E,widely used party red
+FREEDOM FRONT PLUS,FF+,#F58220,widely used party orange
+PATRIOTIC ALLIANCE,PA,,
+GOOD,GOOD,,
+UMKHONTO WESIZWE,MK,,
+ACTIONSA,ActionSA,,

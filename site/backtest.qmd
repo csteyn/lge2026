@@ -1,0 +1,97 @@
+---
+title: "Backtest: predicting 2021 blind"
+---
+
+{{< include _ledger.md >}}
+
+```{r}
+source("_common.R")
+have <- file.exists(pub("backtest_summary.csv"))
+```
+
+The same model, run as if it were 2021, using only what was known before that election: the 2014 national to 2016 local translation, the 2019 national vote and the 2016 local election. Who stood comes from the 2021 results themselves, just as the 2026 candidate lists supply it now. It never sees any 2021 total. The prediction is then scored against the IEC's official 2021 results.
+
+```{r}
+#| results: asis
+if (!have) {
+  cat("::: {.callout-note}\n## Not run yet\nThe backtest needs the 2014 national results (a browser download) and the 2016 local results. Until both are present it is skipped, and the forecast runs without it.\n:::\n")
+} else {
+  s <- rd("backtest_summary.csv")
+  cat(sprintf("**Run:** %s.\n\n", s$label[1]))
+}
+```
+
+## Against the simple rules
+
+A forecast model is only worth its complexity if it beats simple rules: repeat the previous local election, or use the latest national vote as it stands.
+
+```{r}
+if (have) rd("backtest_versus_rules.csv") |>
+  transmute(Rule = rule, `Seat error (mean abs, per party per council)` = round(seat_mae, 2),
+            `Council control correct` = pct(control_correct), `Ward winners correct` = pct(ward_correct)) |>
+  knitr::kable()
+```
+
+## Is the uncertainty honest?
+
+A calibrated forecast's 90% intervals contain the actual result about 90% of the time. Far fewer means over-confidence; far more means vagueness.
+
+```{r}
+if (have) rd("backtest_summary.csv") |>
+  transmute(Spreads = spreads, `Seat intervals` = seat_intervals, `50% intervals hit` = pct(coverage50),
+            `90% intervals hit` = pct(coverage90), `Seat CRPS (lower is better)` = round(seat_crps, 3),
+            `Ward log score (higher is better)` = round(ward_log_score, 3),
+            `Seats won by parties the model could not see` = new_entrant_seats) |>
+  knitr::kable()
+```
+
+```{r}
+#| fig-height: 3
+if (have) {
+  rd("backtest_seats.csv") |>
+    ggplot(aes(pit)) + geom_histogram(breaks = seq(0, 1, 0.1), fill = "#9FB3BC", colour = "#F3F5F4") +
+    geom_hline(yintercept = nrow(rd("backtest_seats.csv")) / 10, linetype = "22", colour = "#1E2B33") +
+    labs(x = "Where the actual seat count fell in the forecast distribution (PIT)", y = "Party x council cases") +
+    theme_lge()
+}
+```
+
+If the uncertainty is right, the bars are level with the dashed line. A U shape means results too often fell in the tails (over-confident); a hump in the middle means intervals were too wide.
+
+## Estimating the political weather
+
+The two spreads in assumption A02 were judgement. The backtest measures them: each party's council-level surprise is split into a part shared across the province and a part specific to each council.
+
+```{r}
+if (have) rd("backtest_shock_sds.csv") |>
+  transmute(Parameter = parameter, `Before (judgement)` = round(config, 3), `Estimated` = round(estimated, 3),
+            `Based on` = based_on) |>
+  knitr::kable()
+```
+
+With a single election, the province-wide spread rests on only a handful of parties, so it is a rough estimate. The council-level spread rests on many more cases.
+
+## Choosing the settings: a pre-registered experiment
+
+The backtest compared 24 settings: learned local premiums kept or dropped, crossed with four province-wide and three council-level spreads. The rule was fixed in the [model log](log.qmd) before any result was seen: choose the lowest seat CRPS among settings whose 90% coverage lies between 80% and 97%.
+
+```{r}
+if (file.exists(pub("backtest_grid.csv"))) rd("backtest_grid.csv") |>
+  arrange(seat_crps) |>
+  transmute(Premiums = intercepts, Province = province, Council = muni,
+            `Seat CRPS` = round(seat_crps, 3), `90% coverage (PIT)` = pct(pit_cov90),
+            `Ward log score` = round(ward_log_score, 3), `Control Brier` = round(control_brier, 3),
+            `Seat error` = round(seat_mae_median, 2),
+            Result = case_when(chosen ~ "chosen", !eligible ~ "outside coverage band", TRUE ~ "")) |>
+  knitr::kable()
+```
+
+## What the model could not see
+
+```{r}
+if (have) {
+  b <- rd("backtest_blind.csv")
+  if (nrow(b)) b |> transmute(Council = muni_code, Party = party, `Seats won` = actual) |> knitr::kable()
+  else cat("Every party that won seats was visible to the model.")
+}
+```

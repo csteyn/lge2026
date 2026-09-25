@@ -1,0 +1,30 @@
+# Seed list for the published province. Live collection derives the national
+# list from the MDB 2026 ward layer; this file supplies names and IEC paths.
+# iec_path: province segment in IEC report URLs. WP (Western Cape) is
+# documented by the Johannesburg model; other provinces' codes are UNVERIFIED.
+province,province_code,iec_path,district,muni_code,muni_name,category
+Western Cape,WC,WP,,CPT,City of Cape Town,A
+Western Cape,WC,WP,DC1 West Coast,WC011,Matzikama,B
+Western Cape,WC,WP,DC1 West Coast,WC012,Cederberg,B
+Western Cape,WC,WP,DC1 West Coast,WC013,Bergrivier,B
+Western Cape,WC,WP,DC1 West Coast,WC014,Saldanha Bay,B
+Western Cape,WC,WP,DC1 West Coast,WC015,Swartland,B
+Western Cape,WC,WP,DC2 Cape Winelands,WC022,Witzenberg,B
+Western Cape,WC,WP,DC2 Cape Winelands,WC023,Drakenstein,B
+Western Cape,WC,WP,DC2 Cape Winelands,WC024,Stellenbosch,B
+Western Cape,WC,WP,DC2 Cape Winelands,WC025,Breede Valley,B
+Western Cape,WC,WP,DC2 Cape Winelands,WC026,Langeberg,B
+Western Cape,WC,WP,DC3 Overberg,WC031,Theewaterskloof,B
+Western Cape,WC,WP,DC3 Overberg,WC032,Overstrand,B
+Western Cape,WC,WP,DC3 Overberg,WC033,Cape Agulhas,B
+Western Cape,WC,WP,DC3 Overberg,WC034,Swellendam,B
+Western Cape,WC,WP,DC4 Garden Route,WC041,Kannaland,B
+Western Cape,WC,WP,DC4 Garden Route,WC042,Hessequa,B
+Western Cape,WC,WP,DC4 Garden Route,WC043,Mossel Bay,B
+Western Cape,WC,WP,DC4 Garden Route,WC044,George,B
+Western Cape,WC,WP,DC4 Garden Route,WC045,Oudtshoorn,B
+Western Cape,WC,WP,DC4 Garden Route,WC047,Bitou,B
+Western Cape,WC,WP,DC4 Garden Route,WC048,Knysna,B
+Western Cape,WC,WP,DC5 Central Karoo,WC051,Laingsburg,B
+Western Cape,WC,WP,DC5 Central Karoo,WC052,Prince Albert,B
+Western Cape,WC,WP,DC5 Central Karoo,WC053,Beaufort West,B

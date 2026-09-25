@@ -1,0 +1,43 @@
+project:
+  type: website
+  output-dir: _site
+
+website:
+  title: "Western Cape councils 2026"
+  description: "An open, probabilistic forecast of the 4 November 2026 municipal elections, with every assumption and error on the record."
+  navbar:
+    left:
+      - href: index.qmd
+        text: Overview
+      - href: municipalities.qmd
+        text: Municipalities
+      - text: Method
+        menu:
+          - methodology.qmd
+          - assumptions.qmd
+          - checks.qmd
+          - backtest.qmd
+          - scoring.qmd
+      - text: Record
+        menu:
+          - log.qmd
+          - corrections.qmd
+          - sources.qmd
+          - data.qmd
+  page-footer:
+    left: "Code MIT. Forecasts and text CC BY 4.0. Method builds on the open Johannesburg model at [joburg.whysoserious.city](https://joburg.whysoserious.city)."
+
+format:
+  html:
+    theme: [default, styles.scss]
+    toc: true
+    toc-depth: 2
+    fig-dpi: 144
+    fig-width: 8
+    fig-height: 4.5
+    df-print: kable
+
+execute:
+  echo: false
+  warning: false
+  message: false

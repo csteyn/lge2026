@@ -1,0 +1,19 @@
+# Human-confirmed facts about which parties are standing in 2026, read by
+# check C15 and by candidate-name harmonisation. Every row needs evidence.
+#   absent_confirmed  not on this council's 2026 ballot (C15 stops flagging it)
+#   renamed           standing under name_2026 (mapped onto the old results name)
+#   distinct          a similar-looking name_2026 is a DIFFERENT party (C17 stops flagging the pair)
+#   disputed          sources disagree; stays flagged, with both sides quoted
+# party must be spelled exactly as in the results files (as C15 prints it).
+muni_code,party,status,name_2026,evidence,source,date
+WC051,KAROO ONTWIKKELINGS PARTY,absent_confirmed,,"Not in the IEC certified list; local knowledge agrees it has dropped out","IEC certified candidate list, Western Cape, 16 Sep 2026; C.E. Steyn",2026-09-24
+WC052,UNITED COMMUNITY FRONT,absent_confirmed,,"Not in the IEC certified list; local knowledge agrees it has dropped out","IEC certified candidate list, Western Cape, 16 Sep 2026; C.E. Steyn",2026-09-24
+WC053,GOOD,absent_confirmed,,"GOOD stands in 19 Western Cape councils and districts but not Beaufort West (WC053) or Central Karoo (DC5)","IEC certified candidate list, Western Cape, 16 Sep 2026",2026-09-24
+WC045,OUDTSHOORN GEMEENSKAP INISIATIEF,absent_confirmed,,"Not in the certified list under any name, including DC4 (no party name containing 'Gemeenskap', 'Inisiatief' or 'Community Initiative'). First recorded as disputed; on re-checking, local knowledge agrees (L021)","IEC certified candidate list, Western Cape, 16 Sep 2026; C.E. Steyn",2026-09-24
+WC052,KAROO GEMEENSKAP PARTY,absent_confirmed,,"Not in the certified list under any name, in any council. First recorded as disputed; on re-checking, local knowledge agrees (L021)","IEC certified candidate list, Western Cape, 16 Sep 2026; C.E. Steyn",2026-09-24
+ALL,BUILD ONE SOUTH AFRICA WITH MMUSI MAIMANE,renamed,BUILD ONE SOUTH AFRICA,"Same party (BOSA); the 2024 ballot name carried the leader's name. First entered on the maintainers' reading (L024), then confirmed","C.E. Steyn (L025)",2026-09-24
+ALL,BLACK FIRST LAND FIRST,distinct,LAND PARTY,"Different parties; near-match found by the C17 audit","model maintainers (L024)",2026-09-24
+ALL,LAND PARTY,distinct,KANNALAND INDEPENDENT PARTY,"Different parties; near-match found by the C17 audit","model maintainers (L024)",2026-09-24
+ALL,UNITED INDEPENDENT MOVEMENT,distinct,KNYSNA INDEPENDENT MOVEMENT,"Different parties; near-match found by the C17 audit","model maintainers (L024)",2026-09-24
+ALL,COMMUNITY PARTY,distinct,JOYA WEB3 COMMUNITY MOVEMENT,"Different parties; near-match found by the C17 audit","model maintainers (L024)",2026-09-24
+ALL,UNITED PROGRESSIVE PARTY SOUTH AFRICA,distinct,UNITED SOUTH AFRICA,"Different parties despite the similar names; near-match found by the C17 audit","C.E. Steyn (L025)",2026-09-24

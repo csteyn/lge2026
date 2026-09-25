@@ -1,0 +1,17 @@
+---
+title: "Municipalities"
+---
+
+{{< include _ledger.md >}}
+
+```{r}
+source("_common.R")
+municipalities |>
+  left_join(council_meta, by = "muni_code") |>
+  transmute(Municipality = sprintf("[%s](m/%s.qmd)", muni_name, muni_code),
+            Code = muni_code, Wards = n_wards, Seats = total_seats,
+            `Majority needed` = majority,
+            `Turnout (median, 90% range)` = sprintf("%s (%s to %s)", pct(turnout_median),
+                                                   pct(turnout_q05), pct(turnout_q95))) |>
+  knitr::kable()
+```
