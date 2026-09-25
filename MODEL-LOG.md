@@ -4,7 +4,7 @@ A running engineering record: decisions with their reasons, errors found (includ
 
 ## Open obstacles
 
-- **O7. Ward winners: the model is worse than the 2019 national vote as it stands** in the 2021 backtest (85.5% against 90.9%). Council control and seats are better. Candidate cause: party-level premium bias (DA +0.98 learned from 2014 -> 2016). Any fix needs its own pre-registered test.
+- **O7. Largely resolved (L040).** On ward Brier score the model now beats the national-vote rule (0.157 against about 0.182); on plain accuracy it trails by about 3 of 406 wards (90.1% against 90.9%).
 - **O8. The province spread (0.55) is blind uncertainty.** Polls with Western Cape breakdowns could narrow it for 2026, but only after their own track record has been checked against past results.
 - **O1. The live data path is partly verified** (IEC local-election reports and MDB 2026 layers fetched and parsed on 2026-09-24; national-election files, candidate lists and the full live run not yet). Each remaining step is treated as untested until it has run on real files.
 - **O2. Historic VD boundaries are not published** (IEC delimits VDs with its own GIS). The VD concordance therefore keys on VD number; check C04 reports how many votes fall in VDs that no longer exist.
@@ -14,6 +14,18 @@ A running engineering record: decisions with their reasons, errors found (includ
 - **O5. Resolved for the Patriotic Alliance (L023).** The National Coloured Congress, the People's Movement for Change and the ATM have too little by-election evidence and keep the prior; their intervals are correspondingly wide.
 
 ## 2026-09-25
+
+**L040. Decisions from the run carrying L038 and L039.**
+
+*Newcomer confirmation (committed in L038).* At the new spreads (0.35/0.15), seat CRPS with newcomers is 0.4083 against 0.4176 without, so the switch-off condition is not met and **the module stays on**. As before, the seat gain is small and its 90% interval includes zero (-0.038 to +0.022), and seat error rises slightly (0.495 -> 0.535). The clear gain is council control (48% -> 68%; Brier 0.515 -> 0.411).
+
+*Ward experiment (L039).* The rule adopts **slopes fixed at 1, ticket-splitting ratio off, premiums halved**. Ward Brier 0.1846 -> 0.1569; ward winners correct 85.7% -> 90.1%; seat CRPS 0.4082 -> 0.4048 (no cost on seats); coverage 88.1%; council control 68% -> 88%. config.yml follows. **My diagnosis was only partly right.** The errors-in-variables correction, the prime suspect, did not help: the corrected-slope variants were worst on seats (CRPS up to 0.49) and no better on wards. A plausible but untested reason is that dividing by a small reliability inflates small, noisy parties' slopes. Halving the premiums mattered most: it improved ward Brier under every slope choice (fitted 0.1846 -> 0.1607; slopes at 1 0.1767 -> 0.1575). I had discounted this suspect because zeroing the premiums did not help. The evidence now says the premiums carry information but overshoot by roughly half. Slopes at 1 matter in combination: with fitted slopes, halving costs too much on seats (CRPS 0.45, not eligible). The ratio on or off is within noise (0.1569 against 0.1575). Twelve variants chosen on one election invite over-fitting: the pattern is robust (halving helps on wards under every slope choice; slopes at 1 remove its cost on seats), the exact ranking of near-ties is not.
+
+*Why the wards were lost (per-ward table, current model).* Of 406 wards: 340 both right, 30 both wrong, 7 won by the model only, 29 by the national-vote rule only. Of those 29, 24 were ANC wins where the model picked the DA, plus 3 civic wins also called for the DA. This is the DA's learned premium (+0.98 from its strong 2016 local result) carried into 2021, when it declined, the same mechanism as the 53-seat overshoot in L027. They were close calls in the model's own view: it gave the actual winner a median probability of 0.36, and more than 0.3 in 79% of them. The 30 both got wrong are mostly ANC wins both called for the DA (15), plus GOOD, PA and local-party wins.
+
+*O7, reassessed.* A deterministic rule scores a ward Brier of 2 for each wrong pick, so the national-vote rule's 90.9% accuracy is a Brier score of about 0.182, against 0.157 for the adopted variant: on the proper score the model is now better. On plain accuracy it trails by about 3 of 406 wards (90.1% against 90.9%).
+
+*Committed before the next run.* The spreads (0.35/0.15) were chosen with the previous translation settings, and they are not re-tuned now. The next run's backtest reports calibration at the combined settings. If established-party 90% coverage falls outside [0.80, 0.97], the spreads are re-tested with the same grid rule (L027/L037) and logged. The attenuation-correction code stays in the project, unused.
 
 **L039. The ward-winner gap (O7): diagnosis, a correction for attenuated slopes, and a pre-registered experiment.** In the blind 2021 backtest the model picked 85.5% of ward winners correctly, against 90.9% for simply using the 2019 national vote, while beating both simple rules on seats.
 

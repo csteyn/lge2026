@@ -23,6 +23,9 @@ model:
   entrants: true
   entrant_min_cell: 8
   byelection_min_wards: 3
+  transfer_b: one
+  ward_ratio: false
+  premium_shrink: 0.5
   sd:                        # shocks on the log-share scale (A02)
     # Chosen by the pre-registered 2021 backtest (MODEL-LOG L027-L028): lowest
     # seat CRPS among 24 settings with 90% coverage in [0.80, 0.97]. Formerly
