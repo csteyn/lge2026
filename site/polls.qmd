@@ -1,0 +1,36 @@
+---
+title: "Polls"
+---
+
+{{< include _ledger.md >}}
+
+```{r}
+source("_common.R")
+```
+
+Polls are not used to make this forecast. They are shown here as a cross-check against the model's own vote, with the record of how Western Cape polls compared with the last election.
+
+## Why polls are not an input
+
+Before the 2024 election, Western Cape polls missed the provincial result by large margins in both directions: from 11 points under to 9 points over on the DA, and up to 10 points over on the EFF. The errors are large and do not lean one way, so there is no consistent bias to correct. Using polls to narrow the forecast's uncertainty would swap a tested assumption for an untested and larger one. (In 2026 the Social Research Foundation has polled the country, Johannesburg, Tshwane and eThekwini, but not Cape Town or the Western Cape; Ipsos is the only published Western Cape poll.)
+
+```{r}
+if (file.exists(pub("polls_track_record.csv"))) rd("polls_track_record.csv") |>
+  transmute(Pollster = pollster, Fieldwork = fieldwork, Election = election, Party = party,
+            Poll = pct(poll_share), Result = pct(result, 1), Error = sprintf("%+.1f points", 100 * (poll_share - result)),
+            Comparable = comparable) |>
+  knitr::kable()
+```
+
+## Model and polls side by side
+
+The model's figure is its PR-ballot vote across all Western Cape councils (or in Cape Town), as a median with the range covering 90% of simulated elections. The poll figure is among registered voters who chose a party, with the pollster's stated 95% margin of error. The two measure different things at different times, so a gap is a prompt to look closer, not a verdict.
+
+```{r}
+if (file.exists(pub("poll_comparison.csv"))) rd("poll_comparison.csv") |>
+  transmute(Area = scope, Party = party, `Model (median)` = pct(model_median),
+            `Model 90% range` = sprintf("%s to %s", pct(model_q05), pct(model_q95)),
+            Poll = sprintf("%s (&plusmn;%.1f)", pct(share), 100 * moe95), Pollster = paste(pollster, fieldwork),
+            Gap = sprintf("%+.0f points", 100 * difference)) |>
+  knitr::kable(escape = FALSE)
+```

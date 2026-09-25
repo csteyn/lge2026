@@ -33,7 +33,7 @@ classify_absences <- function(notable, party_status = NULL) {
 }
 
 run_checks <- function(inputs, groups, transfer, baseline, summaries, cfg, seat_validation = NULL,
-                       party_status = NULL, premium = NULL, entrant_table = NULL) {
+                       party_status = NULL, premium = NULL, entrant_table = NULL, poll_comparison = NULL) {
   lge <- inputs$lge2021
   imp_turnout <- lge |> filter(ballot == "PR") |> distinct(muni_code, vd, registered, spoilt, vd_valid) |>
     filter((vd_valid + spoilt) / registered > 1.05)
@@ -159,6 +159,16 @@ run_checks <- function(inputs, groups, transfer, baseline, summaries, cfg, seat_
       "C18", "Newcomers", "Parties standing in 11+ councils with no history, modelled from the class prior (a sourced override may describe them better)",
       nrow(wide_prior_only),
       sprintf("%d newcomer cases modelled; %s", nrow(entrant_table), paste(wide_prior_only$party, collapse = ", ")),
+      severity = "minor"))
+  }
+
+  if (!is.null(poll_comparison) && nrow(poll_comparison)) {
+    pc <- poll_comparison
+    out <- bind_rows(out, check_row(
+      "C19", "Polls", "Model vote shares outside a poll's stated margin of error (a cross-check: past Western Cape poll errors were larger than their margins, L041-L042)",
+      sum(pc$outside_moe),
+      paste(sprintf("%s %s: model %.0f%%, %s %.0f%% (+/-%.1f)", pc$scope, pc$party, 100 * pc$model_median, pc$pollster,
+                    100 * pc$share, 100 * pc$moe95), collapse = "; "),
       severity = "minor"))
   }
 

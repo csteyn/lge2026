@@ -17,6 +17,7 @@ website:
           - assumptions.qmd
           - checks.qmd
           - backtest.qmd
+          - polls.qmd
           - scoring.qmd
       - text: Record
         menu:

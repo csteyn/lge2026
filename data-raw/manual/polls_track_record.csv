@@ -1,0 +1,11 @@
+# How Western Cape polls compared with the 2024 provincial result
+# (DA 55.30%, ANC 19.55%, PA 7.80%, EFF 5.30%). Errors run in BOTH
+# directions and are large (DA -11 to +9 points; EFF up to +10), so no
+# consistent bias exists to correct (MODEL-LOG L041-L042).
+pollster,fieldwork,election,party,poll_share,result,comparable,source
+Social Research Foundation,Jul 2023,2024 provincial,DEMOCRATIC ALLIANCE,0.64,0.5530,"yes (provincial ballot, 66% turnout modelled; raw 60.4%)",https://srfreports.co.za/reports/political-balance-of-power-in-the-western-cape
+Social Research Foundation,Jul 2023,2024 provincial,AFRICAN NATIONAL CONGRESS,0.13,0.1955,"yes (provincial ballot, 66% turnout modelled; raw 11.6%)",https://srfreports.co.za/reports/political-balance-of-power-in-the-western-cape
+Social Research Foundation,Jul 2023,2024 provincial,ECONOMIC FREEDOM FIGHTERS,0.15,0.0530,"yes (provincial ballot, 66% turnout modelled; raw 17.6%)",https://srfreports.co.za/reports/political-balance-of-power-in-the-western-cape
+Ipsos,Oct-Nov 2023,2024 provincial,DEMOCRATIC ALLIANCE,0.44,0.5530,yes,https://www.dailymaverick.co.za/article/2024-05-27-new-challengers-threaten-da-majority-in-w-cape-ahead-of-poll/
+Social Research Foundation,Mar 2024,2024 provincial,DEMOCRATIC ALLIANCE,0.53,0.5530,"partly (ballot not stated in the report found)",https://www.dailymaverick.co.za/article/2024-05-27-new-challengers-threaten-da-majority-in-w-cape-ahead-of-poll/
+Change Starts Now (commissioned survey),late 2023,2024 provincial,DEMOCRATIC ALLIANCE,0.42,0.5530,no (18% undeclared kept in the base),https://www.wits.ac.za/news/latest-news/opinion/2024/2024-02/new-poll-shows-dramatic-decline-in-electoral-support-of-anc.html

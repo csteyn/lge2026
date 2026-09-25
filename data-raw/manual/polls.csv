@@ -1,0 +1,13 @@
+# Published polls, recorded as a CROSS-CHECK against the model's own
+# provincial vote, not as model inputs (MODEL-LOG L041). Shares among
+# registered voters who chose a party. moe95 is the pollster's stated
+# maximum 95% margin of error for that subsample.
+pollster,fieldwork,published,scope,party,share,moe95,source
+Ipsos Khayabus,Jun-Jul 2026,2026-09-04,Western Cape,DEMOCRATIC ALLIANCE,0.47,0.0515,https://www.ipsos.com/en-za/key-metros-remain-battlegrounds-ahead-november-local-government-elections
+Ipsos Khayabus,Jun-Jul 2026,2026-09-04,Western Cape,AFRICAN NATIONAL CONGRESS,0.25,0.0515,https://www.ipsos.com/en-za/key-metros-remain-battlegrounds-ahead-november-local-government-elections
+Ipsos Khayabus,Jun-Jul 2026,2026-09-04,Western Cape,PATRIOTIC ALLIANCE,0.09,0.0515,https://www.ipsos.com/en-za/key-metros-remain-battlegrounds-ahead-november-local-government-elections
+Ipsos Khayabus,Jun-Jul 2026,2026-09-04,Western Cape,ECONOMIC FREEDOM FIGHTERS,0.08,0.0515,https://www.ipsos.com/en-za/key-metros-remain-battlegrounds-ahead-november-local-government-elections
+Ipsos Khayabus,Jun-Jul 2026,2026-09-04,Cape Town,DEMOCRATIC ALLIANCE,0.46,0.0612,https://www.ipsos.com/en-za/key-metros-remain-battlegrounds-ahead-november-local-government-elections
+Ipsos Khayabus,Jun-Jul 2026,2026-09-04,Cape Town,AFRICAN NATIONAL CONGRESS,0.26,0.0612,https://www.ipsos.com/en-za/key-metros-remain-battlegrounds-ahead-november-local-government-elections
+Ipsos Khayabus,Jun-Jul 2026,2026-09-04,Cape Town,ECONOMIC FREEDOM FIGHTERS,0.11,0.0612,https://www.ipsos.com/en-za/key-metros-remain-battlegrounds-ahead-november-local-government-elections
+Ipsos Khayabus,Jun-Jul 2026,2026-09-04,Cape Town,PATRIOTIC ALLIANCE,0.08,0.0612,https://www.ipsos.com/en-za/key-metros-remain-battlegrounds-ahead-november-local-government-elections

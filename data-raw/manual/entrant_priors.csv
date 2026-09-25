@@ -3,3 +3,4 @@
 # Every row needs a source (e.g. a named poll with fieldwork dates); without
 # one, a newcomer uses the class prior built from past Western Cape newcomers.
 party,median,q90,source,date_added
+SOUTH AFRICAN COMMUNIST PARTY,0.008,0.025,"Ipsos Khayabus Jun-Jul 2026 (published 4 Sep 2026): the SACP is not among parties with 2%+ nationally, so below 2% among registered voters with a preference; scaled by the ANC's weaker Western Cape base (25% against 31% nationally). The scaling is the maintainers' judgement (L041)",2026-09-25
