@@ -20,7 +20,7 @@ model:
   # the 2024 baseline, and the placebo parties show a systematic drift there.
   byelection_since: "2024-05-29"
   # Newcomer module (L035). Off until the pre-registered backtest adopts it.
-  entrants: false
+  entrants: true
   entrant_min_cell: 8
   byelection_min_wards: 3
   sd:                        # shocks on the log-share scale (A02)
@@ -28,8 +28,8 @@ model:
     # seat CRPS among 24 settings with 90% coverage in [0.80, 0.97]. Formerly
     # judgement (0.10, 0.15), which caught only 78% of 2021 results at 90%.
     # The surface is flat near the top: 0.35 performs about as well.
-    province_party: 0.55
-    muni_party: 0.45
+    province_party: 0.35
+    muni_party: 0.15
     ward_party: null         # null = estimated from 2019 -> 2021 residuals
     vd_party: null
     turnout_province: 0.15   # logit scale

@@ -15,6 +15,14 @@ A running engineering record: decisions with their reasons, errors found (includ
 
 ## 2026-09-25
 
+**L038. Corrected backtest: decisions under the re-registered rules.** The corrected commitment was frozen first and verified before any result was read: tag `prereg-2026-r1` (commit `fafe787`), Release published 2026-09-25 12:19:30 UTC, SCORING.md identical to the corrected text, tests passing.
+
+*Grid (all 24 settings on the same 390 cases).* The rule chooses **fitted premiums, province spread 0.35, council spread 0.15** (seat CRPS 0.4170; established-party coverage 85.6% at 90% and 50.3% at 50%; tails 13.9% low and 8.7% high, so actual seats fall below the forecast a little too often, consistent with the DA over-prediction). config.yml follows. The earlier choice, 0.55/0.45, ranks 12th of the 12 fitted settings (0.4344); its earlier win was the dilution artefact of E1. Keeping the learned premiums still wins by a wide margin (about 0.42 against 0.63-0.71), so that conclusion stands. The top settings are close (0.4170, 0.4185, 0.4194), but the differences are now exact and paired. Reported, not optimised: the chosen setting's council-control Brier score (0.497) is worse than the widest settings' (about 0.44).
+
+*Newcomer module (run at the spreads then in config, 0.55/0.45).* Seat CRPS 0.4331 -> 0.4278, coverage 92.4%: **adopted** under the rule. The evidence on seats is weak: the paired difference is -0.005, with a 90% council-bootstrap interval of -0.032 to +0.023, which includes zero, and seat error rises slightly (0.504 -> 0.524). The clear gain is council control on the same 25 councils (48% -> 76%; Brier 0.447 -> 0.386). Ward winners are unchanged. Past newcomers' shares are almost uncorrelated across councils (rho = 0.07). **Committed before the next run:** the backtest reruns at the new spreads; if seat CRPS is then higher with newcomers than without, the module is switched off and logged.
+
+*Versus the simple rules, corrected (0.55/0.45, common cases).* Seat error: model 0.50, national vote as-is 0.65, repeat previous local 0.77, so the model is better on seats, by less than the withdrawn figures claimed. Council control without newcomers: model 48%, national as-is 56%, previous local 48%. Ward winners: model 85.5%, national as-is 90.9%, previous local 87.2% (O7 stands). These are replaced by the rerun at the chosen settings.
+
 **L037. Grid rescored; a flaw in the scoring design found; newcomer module not adopted on the flawed rule; corrections committed before rerunning.**
 
 *Grid, rescored exactly as committed in L036.* The choice is unchanged: fitted premiums, spreads 0.55 and 0.45, seat CRPS 0.7148, exact 90% coverage 90.3%. Council control is noisy with 25 councils: settings within 0.003 CRPS of the chosen one hit 48-64%, so the 64% quoted for the chosen setting is partly luck.

@@ -44,8 +44,8 @@ Each of 2 000 draws adds shocks on the log-share scale at four levels:
 
 | Level | Spread | Source |
 |---|---|---|
-| Province, per party (shared by all municipalities in a draw) | 0.55 | chosen by the pre-registered 2021 backtest (A02) |
-| Municipality, per party | 0.45 | chosen by the pre-registered 2021 backtest (A02) |
+| Province, per party (shared by all municipalities in a draw) | 0.35 | chosen by the pre-registered 2021 backtest (A02) |
+| Municipality, per party | 0.15 | chosen by the pre-registered 2021 backtest (A02) |
 | Ward, per party | estimated | between-ward residual spread of the step 2 fit |
 | VD, per party | estimated | within-ward residual spread of the step 2 fit |
 
@@ -59,7 +59,7 @@ Parties standing in a council for the first time have no past vote to build on. 
 
 ## The backtest
 
-The model is run as if it were 2021, using only what was known before that election, and scored against the official 2021 results. It is compared with two simple rules: repeat the previous local election, and use the latest national vote as it stands. The backtest also estimates the province- and council-level spreads directly from how far 2021 departed from its prediction (L026). The spreads in the simulation were chosen this way, by a rule fixed before the results were seen (L027-L028). Predicting 2021 blind, the model beat both simple rules on seats (error 0.83 against 1.46 and 1.70) and council control (64% against 56% and 48%), but not on ward winners (85.5% against 90.9% for the national vote as it stands). One election is a small sample, and 2021 was an unusual one.
+The model is run as if it were 2021, using only what was known before that election, and scored against the official 2021 results. It is compared with two simple rules: repeat the previous local election, and use the latest national vote as it stands. The backtest also estimates the province- and council-level spreads directly from how far 2021 departed from its prediction (L026). The spreads in the simulation were chosen this way, by a rule fixed before the results were seen (L027-L028). Predicting 2021 blind, and scored on the same cases as the simple rules, the model beat both on seats (error 0.50 against 0.65 for the national vote as it stands and 0.77 for repeating the previous local election). It did not beat them on ward winners (85.5% against 90.9%). On council control it beat them only with the newcomer module (76% against 56%). Earlier figures computed on a flawed basis were withdrawn (ERRATA E1). One election is a small sample, and 2021 was an unusual one.
 
 ## What the probabilities mean, and what they leave out
 
