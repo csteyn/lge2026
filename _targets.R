@@ -30,7 +30,8 @@ input_targets <- if (mode == "demo") {
   list(tar_target(inputs, make_demo_data(cfg$model$seed)),
        tar_target(seat_validation, NULL),
        tar_target(byelections, NULL),
-       tar_target(backtest_inputs, assemble_demo_backtest(inputs)))
+       tar_target(backtest_inputs, assemble_demo_backtest(inputs)),
+       tar_target(first_timer_data, make_demo_first_timers()))
 } else {
   list(
     tar_target(munis_csv, "data-raw/manual/municipalities.csv", format = "file"),
@@ -62,9 +63,16 @@ input_targets <- if (mode == "demo") {
     tar_target(lge2016_files, lge2016_fetch |> filter(ok, str_detect(dest, "downloadable_party_results")) |>
                  pull(dest), format = "file", error = "continue"),
     tar_target(npe2014_file, npe2014_zip(), format = "file", error = "continue"),
+    # 2011 results identify 2016's newcomers, the out-of-sample prior for the
+    # newcomer test (L035). Optional: without them the test reports it could not run.
+    tar_target(lge2011_fetch, fetch_lge_reports(filter(munis_seed, province_code %in% cfg$model$provinces),
+                                                cfg, years = "2011", reports = cfg$iec$lge_reports[1])),
+    tar_target(lge2011_files, lge2011_fetch |> filter(ok, str_detect(dest, "downloadable_party_results")) |>
+                 pull(dest)),
     tar_target(backtest_inputs, assemble_live_backtest(cfg, npe2014_file, lge2016_files, npe_files,
-                                                       inputs$lge2021, seat_calc_files, munis_seed),
+                                                       inputs$lge2021, seat_calc_files, munis_seed, lge2011_files),
                error = "continue"),
+    tar_target(first_timer_data, assemble_first_timers(backtest_inputs, inputs$lge2021), error = "continue"),
     tar_target(inputs, assemble_live_inputs(cfg, lge_files, npe_files, wards_file, vds_file, candidate_files,
                                             party_status))
   )
@@ -100,25 +108,41 @@ list(
   tar_target(premium, premium_estimate$premium),
   tar_target(prov_effects, draw_province_effects(sort(unique(baseline$group)), swing, cfg, premium)),
 
+  # newcomers (L035): prior from past newcomers; used in the forecast only
+  # when config model.entrants is true (set by the pre-registered test)
+  tar_target(entrant_prior, estimate_entrant_prior(first_timer_data, cfg$model$entrant_min_cell %||% 8)),
+  tar_target(backtest_entrant_prior, {
+    ft <- filter(first_timer_data, year == 2016)
+    if (nrow(ft) >= 20) estimate_entrant_prior(ft, cfg$model$entrant_min_cell %||% 8) else NULL
+  }),
+  tar_target(entrant_overrides_file, "data-raw/manual/entrant_priors.csv", format = "file"),
+  tar_target(entrant_overrides, read_entrant_overrides(entrant_overrides_file)),
+  tar_target(entrants, if (isTRUE(cfg$model$entrants)) find_entrants(scoped$pr_lists, scoped$contests, groups) else tibble()),
+  tar_target(entrant_draws, draw_entrant_shares(entrants, entrant_prior, cfg$model$n_draws, cfg$model$seed + 7,
+                                                entrant_overrides)),
+  tar_target(entrant_table, describe_entrants(entrants, entrant_prior, entrant_draws, entrant_overrides)),
+
   # one branch per municipality
   tar_group_by(baseline_m, baseline, muni_code),
   tar_target(sims, simulate_municipality(
     baseline_m, filter(scoped$councils, muni_code == baseline_m$muni_code[1]),
-    prov_effects, other_w, swing, transfer, cfg), pattern = map(baseline_m), iteration = "list"),
+    prov_effects, other_w, swing, transfer, cfg,
+    entrant_shares = entrant_draws[[baseline_m$muni_code[1]]], entrant_contests = scoped$contests),
+    pattern = map(baseline_m), iteration = "list"),
   tar_target(summaries, bind_summaries(map(sims, summarise_simulation, cfg = cfg))),
 
   # --- checks and publication ------------------------------------------------------
   tar_target(checks, run_checks(scoped, groups, transfer, baseline, summaries, cfg, seat_validation,
-                                  party_status, premium)),
+                                  party_status, premium, entrant_table)),
   tar_target(assumptions_file, "data-raw/manual/assumptions.csv", format = "file"),
   tar_target(errata_file, "ERRATA.md", format = "file"),
   tar_target(public, {
     assumptions_file
     write_public_outputs(summaries, checks, scoped, cfg, transfer, seat_validation, party_status, premium,
-                         premium_estimate)
+                         premium_estimate, entrant_table)
   }, format = "file"),
   # --- backtest: predict 2021 blind, score it, estimate the A02 spreads (L026)
-  tar_target(backtest, run_backtest(backtest_inputs, cfg), error = "continue"),
+  tar_target(backtest, run_backtest(backtest_inputs, cfg, backtest_entrant_prior), error = "continue"),
   tar_target(backtest_public, write_backtest_outputs(backtest), format = "file", error = "continue"),
 
   tar_target(site_pages, {

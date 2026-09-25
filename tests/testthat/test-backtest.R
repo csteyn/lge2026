@@ -57,3 +57,16 @@ test_that("the grid applies the pre-registered selection rule", {
     expect_equal(g$seat_crps[g$chosen], min(g$seat_crps[g$eligible]))
   }
 })
+
+test_that("scoring is exact and deterministic, however the call is written (L036)", {
+  set.seed(5); x <- rpois(500, 3)
+  for (y in c(0L, 3L, 9L)) expect_equal(crps_int(x, y), crps_sample(x, y), tolerance = 1e-12)
+  # expected randomised-PIT coverage equals the long-run average of random PITs
+  u <- mean(replicate(20000, { p <- pit_discrete(x, 4L); p >= 0.05 & p <= 0.95 }))
+  expect_equal(pit_in(x, 4L, 0.05, 0.95), u, tolerance = 0.01)
+  ch <- run_chain(bt$inputs, cfg, n_draws = 120)
+  inline <- score_chain(run_chain(bt$inputs, cfg, n_draws = 120), bt$truth)$summary
+  stored <- score_chain(ch, bt$truth)$summary
+  expect_equal(inline$seat_crps, stored$seat_crps)
+  expect_equal(inline$pit_cov90, stored$pit_cov90)
+})

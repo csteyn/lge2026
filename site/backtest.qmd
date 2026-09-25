@@ -86,6 +86,24 @@ if (file.exists(pub("backtest_grid.csv"))) rd("backtest_grid.csv") |>
   knitr::kable()
 ```
 
+## New parties: a pre-registered test
+
+Parties with no history won seats the model could not see. The newcomer module was tested by running the 2021 backtest with and without it, using a prior built only from 2016's newcomers. The rule, fixed in the [model log](log.qmd) before the result: adopt the module if seat CRPS is lower with it and 90% coverage stays between 80% and 97%.
+
+```{r}
+if (file.exists(pub("backtest_newcomers.csv"))) {
+  x <- rd("backtest_newcomers.csv")
+  if ("module" %in% names(x)) x |>
+    transmute(Run = module, `Newcomer cases` = newcomer_cases, `Seat CRPS` = round(seat_crps, 3),
+              `90% coverage (PIT)` = pct(pit_cov90), `Seat error` = round(seat_mae_median, 2),
+              `Council control correct` = pct(control_modal_correct), `Ward winners correct` = pct(ward_modal_correct),
+              `Seats won by unseen parties` = new_entrant_seats,
+              Decision = if_else(module == "with newcomers", if_else(adopt, "adopt", "do not adopt"), "")) |>
+    knitr::kable()
+  else cat(x$note[1])
+}
+```
+
 ## What the model could not see
 
 ```{r}

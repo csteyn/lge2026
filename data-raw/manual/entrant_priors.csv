@@ -1,0 +1,5 @@
+# Party-specific share priors for newcomers, overriding the class prior
+# (L035). Council-level share, as median and 90th percentile of a log-normal.
+# Every row needs a source (e.g. a named poll with fieldwork dates); without
+# one, a newcomer uses the class prior built from past Western Cape newcomers.
+party,median,q90,source,date_added

@@ -366,7 +366,8 @@ draw_province_effects <- function(groups_all, swing_priors, cfg, premium = NULL)
   list(party = mat, turnout = turnout)
 }
 
-simulate_municipality <- function(base_m, council, prov, other_w, swing_priors, transfer, cfg) {
+simulate_municipality <- function(base_m, council, prov, other_w, swing_priors, transfer, cfg,
+                                  entrant_shares = NULL, entrant_contests = NULL) {
   code <- base_m$muni_code[1]
   n_draws <- cfg$model$n_draws
   sdc <- cfg$model$sd
@@ -387,6 +388,20 @@ simulate_municipality <- function(base_m, council, prov, other_w, swing_priors, 
   C[is.na(C)] <- FALSE
   ratio <- wide |> distinct(group, log_ward_ratio) |> arrange(match(group, groups)) |> pull(log_ward_ratio)
 
+  # Newcomers (L035). They have no baseline, so they are inserted AFTER the
+  # established parties' shares have been computed with all their shocks:
+  # each newcomer takes its drawn council share (varied across wards and VDs
+  # with the ward and VD spreads, re-centred so the council total equals the
+  # draw exactly) and everyone else is scaled down. Inserting them before the
+  # shocks instead diluted them by about 14% (L035).
+  ent <- if (!is.null(entrant_shares)) setdiff(colnames(entrant_shares), groups) else character()
+  n_e <- length(ent)
+  C_ent <- if (n_e) vapply(ent, \(p) {
+    if (is.null(entrant_contests)) return(rep(TRUE, nrow(vds)))
+    vds$ward_id %in% entrant_contests$ward_id[entrant_contests$muni_code == code & entrant_contests$party == p]
+  }, logical(nrow(vds))) else NULL
+  if (n_e) C_ent <- matrix(C_ent, nrow(vds), n_e, dimnames = list(NULL, ent))
+
   # Refuse bad inputs here, with names, rather than fail inside the seat maths
   bad <- c(
     if (length(B) != 1 || !is.finite(B) || B < 1) sprintf("council size is %s", paste(B, collapse = ",")),
@@ -394,7 +409,8 @@ simulate_municipality <- function(base_m, council, prov, other_w, swing_priors, 
     if (!is.finite(sd_vd)) "VD spread not estimable (set model.sd.vd_party in config.yml)",
     if (any(!is.finite(vds$registered))) sprintf("%d VDs with missing registration", sum(!is.finite(vds$registered))),
     if (any(!is.finite(vds$turnout))) sprintf("%d VDs with missing turnout", sum(!is.finite(vds$turnout))),
-    if (any(is.na(vds$ward_id))) sprintf("%d VDs with no 2026 ward", sum(is.na(vds$ward_id)))
+    if (any(is.na(vds$ward_id))) sprintf("%d VDs with no 2026 ward", sum(is.na(vds$ward_id))),
+    if (n_e && nrow(entrant_shares) < cfg$model$n_draws) "fewer newcomer draws than simulation draws"
   )
   if (length(bad)) stop("simulate_municipality(", code, "): ", paste(bad, collapse = "; "), call. = FALSE)
 
@@ -410,12 +426,13 @@ simulate_municipality <- function(base_m, council, prov, other_w, swing_priors, 
 
   # OTHER is split into real parties by fixed weights before seats are allocated
   ow <- other_w |> filter(muni_code == code)
-  seat_parties <- c(setdiff(groups, "OTHER"), setdiff(ow$party, groups))
+  seat_parties <- c(setdiff(groups, "OTHER"), ent, setdiff(ow$party, c(groups, ent)))
+  all_groups <- c(groups, ent)
 
   seats <- matrix(0L, n_draws, length(seat_parties), dimnames = list(NULL, seat_parties))
   winners <- matrix(NA_character_, n_draws, n_w, dimnames = list(NULL, wards))
-  ward_share <- array(NA_real_, c(n_draws, n_w, n_p), dimnames = list(NULL, wards, groups))
-  pr_share <- matrix(NA_real_, n_draws, n_p, dimnames = list(NULL, groups))
+  ward_share <- array(NA_real_, c(n_draws, n_w, n_p + n_e), dimnames = list(NULL, wards, all_groups))
+  pr_share <- matrix(NA_real_, n_draws, n_p + n_e, dimnames = list(NULL, all_groups))
   turnout_out <- numeric(n_draws)
   n_ties <- 0L
 
@@ -434,15 +451,28 @@ simulate_municipality <- function(base_m, council, prov, other_w, swing_priors, 
     t <- plogis(t_logit + prov$turnout[d] + rnorm(1, 0, sdc$turnout_municipality) +
                   rnorm(n_v, 0, sdc$turnout_vd))
     voters <- reg * t
+    if (n_e) {
+      # newcomer noise from its own stream, so established parties see exactly
+      # the same random numbers with or without newcomers (paired, L036)
+      m <- withr::with_seed(cfg$model$seed + 100000L + d, exp(
+        matrix(rnorm(n_w * n_e, 0, sd_ward), n_w, n_e)[w_idx, , drop = FALSE] +
+          matrix(rnorm(n_v * n_e, 0, sd_vd), n_v, n_e)))
+      m <- sweep(m, 2, colSums(m * voters) / sum(voters), "/")   # voter-weighted mean exactly 1
+      s_vd <- sweep(m, 2, entrant_shares[d, ent], "*")
+      s_vd <- s_vd * pmin(1, 0.95 / pmax(rowSums(s_vd), 1e-12))  # never more than 95% of a VD
+      p_pr <- cbind(p_pr * (1 - rowSums(s_vd)), s_vd)
+      s_w <- s_vd * C_ent                                          # ward ballot: only where standing
+      p_w <- cbind(p_w * (1 - rowSums(s_w)), s_w)
+    }
     v_pr <- voters * p_pr
     v_w <- voters * p_w
     wv <- rowsum(v_w, w_idx, reorder = TRUE)
-    win <- groups[max.col(wv, ties.method = "first")]
+    win <- all_groups[max.col(wv, ties.method = "first")]
 
     combined <- colSums(v_pr) + colSums(v_w)
-    names(combined) <- groups
+    names(combined) <- all_groups
     # split OTHER into its constituent parties
-    votes <- combined[setdiff(groups, "OTHER")]
+    votes <- combined[setdiff(all_groups, "OTHER")]
     if ("OTHER" %in% groups && nrow(ow)) {
       extra <- combined[["OTHER"]] * ow$weight
       names(extra) <- ow$party
@@ -461,7 +491,7 @@ simulate_municipality <- function(base_m, council, prov, other_w, swing_priors, 
     turnout_out[d] <- sum(voters) / sum(reg)
   }
 
-  list(muni_code = code, total_seats = B, groups = groups, wards = wards,
+  list(muni_code = code, total_seats = B, groups = all_groups, wards = wards, entrants = ent,
        seats = seats, winners = winners, ward_share = ward_share,
        pr_share = pr_share, turnout = turnout_out, n_ties = n_ties)
 }

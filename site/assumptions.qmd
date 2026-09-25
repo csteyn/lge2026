@@ -42,3 +42,19 @@ if (file.exists(pub("byelection_placebo.csv"))) {
     knitr::kable() |> print()
 }
 ```
+
+## Parties standing for the first time
+
+```{r}
+if (file.exists(pub("newcomers.csv"))) {
+  rd("newcomers.csv") |>
+    left_join(select(municipalities, muni_code, muni_name), by = "muni_code") |>
+    arrange(desc(share_median)) |>
+    transmute(Council = muni_name, Party = party, `Stands in` = paste(councils, "councils"),
+              `Share (median)` = pct(share_median, 1),
+              `90% range` = sprintf("%s to %s", pct(share_q05, 1), pct(share_q95, 1)), Basis = basis) |>
+    knitr::kable()
+} else {
+  cat("The newcomer module is not switched on yet (see the backtest page).")
+}
+```

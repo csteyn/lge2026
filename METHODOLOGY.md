@@ -53,6 +53,10 @@ Shares are renormalised with a softmax. The ward ballot is the PR ballot shifted
 
 Ward winners are the plurality on the ward ballot. Combined votes go through Schedule 1. Coalition arithmetic then enumerates every subset of the ten largest parties and records which are winning, and which are minimal winning (drop the smallest member and it loses).
 
+## Parties with no history
+
+Parties standing in a council for the first time have no past vote to build on. Each simulated election draws their council share from how past Western Cape newcomers of the same breadth (1, 2-10 or 11+ councils) and ward coverage actually did, with a party's draws correlated across the councils it stands in. The share is taken proportionally from all other parties. A party-specific prior, such as one based on polls, can replace this only with a named source. Whether this improves the forecast is decided by a pre-registered backtest (L035).
+
 ## The backtest
 
 The model is run as if it were 2021, using only what was known before that election, and scored against the official 2021 results. It is compared with two simple rules: repeat the previous local election, and use the latest national vote as it stands. The backtest also estimates the province- and council-level spreads directly from how far 2021 departed from its prediction (L026). The spreads in the simulation were chosen this way, by a rule fixed before the results were seen (L027-L028). Predicting 2021 blind, the model beat both simple rules on seats (error 0.83 against 1.46 and 1.70) and council control (64% against 56% and 48%), but not on ward winners (85.5% against 90.9% for the national vote as it stands). One election is a small sample, and 2021 was an unusual one.

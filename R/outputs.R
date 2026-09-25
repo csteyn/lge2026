@@ -4,7 +4,8 @@
 # so any past forecast can be reproduced and compared with the current one.
 
 write_public_outputs <- function(summaries, checks, inputs, cfg, transfer, seat_validation = NULL,
-                                 party_status = NULL, premium = NULL, premium_estimate = NULL) {
+                                 party_status = NULL, premium = NULL, premium_estimate = NULL,
+                                 entrant_table = NULL) {
   dir.create(path_public(), showWarnings = FALSE, recursive = TRUE)
   id <- run_id()
   meta <- tibble(
@@ -28,6 +29,7 @@ write_public_outputs <- function(summaries, checks, inputs, cfg, transfer, seat_
   if (!is.null(seat_validation)) tables$seat_validation <- seat_validation
   if (!is.null(party_status)) tables$party_status <- party_status
   if (!is.null(premium)) tables$local_premium <- premium
+  if (!is.null(entrant_table) && nrow(entrant_table)) tables$newcomers <- entrant_table
   if (!is.null(premium_estimate) && nrow(premium_estimate$ward_residuals)) {
     tables$byelection_residuals <- premium_estimate$ward_residuals
     tables$byelection_placebo <- premium_estimate$placebo

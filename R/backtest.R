@@ -86,7 +86,7 @@ backtest_truth <- function(lge_truth, councils, seat_truth = NULL) {
 #' intercepts = "fitted" carries each party's learned local premium `a` into
 #' the next cycle; "zero" keeps only the learned spatial structure `b`
 #' (the backtest showed the premiums do not transfer between cycles, L027).
-prepare_chain <- function(inp, cfg, intercepts = c("fitted", "zero")) {
+prepare_chain <- function(inp, cfg, intercepts = c("fitted", "zero"), entrant_prior = NULL, entrant_overrides = NULL) {
   intercepts <- match.arg(intercepts)
   groups <- define_party_groups(inp$lge_prev, inp$npe_latest, cfg, inp$pr_lists)
   ow <- other_composition(groups, inp$lge_prev, inp$npe_latest)
@@ -98,8 +98,10 @@ prepare_chain <- function(inp, cfg, intercepts = c("fitted", "zero")) {
   base <- build_baseline(inp$npe_latest, inp$lge_prev, inp$vd_new, groups, tr, cg)
   # with zero intercepts there is no learned premium to draw an unfitted party's from
   prem <- if (intercepts == "fitted") local_premium(groups, tr) else NULL
+  entrants <- if (!is.null(entrant_prior)) find_entrants(inp$pr_lists, inp$contests, groups) else tibble()
   list(inp = inp, groups = groups, other_w = ow, transfer = tr, baseline = base, premium = prem,
-       intercepts = intercepts)
+       intercepts = intercepts, entrants = entrants, entrant_prior = entrant_prior,
+       entrant_overrides = entrant_overrides)
 }
 
 simulate_chain <- function(prep, cfg, n_draws = 1000, sd_override = list()) {
@@ -107,9 +109,11 @@ simulate_chain <- function(prep, cfg, n_draws = 1000, sd_override = list()) {
   cfg$model$sd <- utils::modifyList(cfg$model$sd, sd_override)
   base <- prep$baseline
   prov <- draw_province_effects(sort(unique(base$group)), empty_swing(), cfg, prep$premium)
+  ed <- if (nrow(prep$entrants %||% tibble())) draw_entrant_shares(prep$entrants, prep$entrant_prior, n_draws,
+                                                                  cfg$model$seed + 7, prep$entrant_overrides) else list()
   sims <- map(split(base, base$muni_code), \(b) simulate_municipality(
     b, filter(prep$inp$councils, muni_code == b$muni_code[1]), prov, prep$other_w, empty_swing(),
-    prep$transfer, cfg))
+    prep$transfer, cfg, entrant_shares = ed[[b$muni_code[1]]], entrant_contests = prep$inp$contests))
   c(prep[setdiff(names(prep), "inp")], list(sims = sims, sd_used = cfg$model$sd, n_draws = n_draws))
 }
 
@@ -121,11 +125,32 @@ run_chain <- function(inp, cfg, n_draws = 1000, sd_override = list(), intercepts
 
 crps_sample <- function(x, y) mean(abs(x - y)) - 0.5 * mean(abs(outer(x, x, "-")))
 
+#' Exact CRPS for whole-number outcomes (seats): the CRPS integral is a sum
+#' over integers of (F(k) - 1{y <= k})^2. Identical to crps_sample() on all
+#' draws, but exact, deterministic and fast (L036).
+crps_int <- function(x, y) {
+  lo <- min(x, y); hi <- max(x, y)
+  if (lo == hi) return(0)
+  k <- lo:(hi - 1)
+  Fk <- ecdf(x)(k)
+  sum((Fk - (y <= k))^2)
+}
+
+#' Probability that a randomised PIT falls in [a, b], computed exactly: the
+#' coverage a calibrated forecast would show, with no random draw (L036)
+pit_in <- function(x, y, a, b) {
+  lo <- mean(x < y); p <- mean(x == y)
+  if (p == 0) return(as.numeric(lo >= a & lo <= b))
+  u_lo <- min(max((a - lo) / p, 0), 1); u_hi <- min(max((b - lo) / p, 0), 1)
+  u_hi - u_lo
+}
+
 #' Randomised PIT for a discrete outcome: uniform if the forecast is calibrated
 pit_discrete <- function(x, y, u = runif(1)) mean(x < y) + u * mean(x == y)
 
 score_chain <- function(chain, truth, seed = 1) {
-  set.seed(seed)
+  force(chain) # evaluate the simulation BEFORE seeding: R is lazy, and the
+  set.seed(seed) # simulation reseeds the generator itself (L036)
   # seats: every party that won seats or had a real chance of one
   seats <- imap_dfr(chain$sims, \(sim, m) {
     s <- sim$seats
@@ -135,10 +160,11 @@ score_chain <- function(chain, truth, seed = 1) {
       x <- if (p %in% colnames(s)) s[, p] else rep(0L, nrow(s))
       y <- coalesce(act$seats[match(p, act$party)], 0L)
       q <- quantile(x, c(0.05, 0.25, 0.75, 0.95), type = 1, names = FALSE)
-      sx <- if (length(x) > 600) sample(x, 600) else x # CRPS on a subsample: O(n^2)
       tibble(muni_code = m, party = p, actual = y, median = median(x), q05 = q[1], q95 = q[4],
              in50 = y >= q[2] & y <= q[3], in90 = y >= q[1] & y <= q[4],
-             pit = pit_discrete(x, y), crps = crps_sample(sx, y),
+             pit = pit_discrete(x, y), crps = crps_int(x, y),
+             p_in50 = pit_in(x, y, 0.25, 0.75), p_in90 = pit_in(x, y, 0.05, 0.95),
+             p_low10 = pit_in(x, y, 0, 0.1), p_high10 = pit_in(x, y, 0.9, 1),
              modelled = p %in% colnames(s))
     })
   })
@@ -173,8 +199,9 @@ score_chain <- function(chain, truth, seed = 1) {
     coverage50 = mean(seats$in50), coverage90 = mean(seats$in90),
     # randomised-PIT coverage: exact under calibration even for small whole
     # numbers, where quantile intervals over-cover (L027); modelled parties only
-    pit_cov50 = mean(m$pit >= 0.25 & m$pit <= 0.75), pit_cov90 = mean(m$pit >= 0.05 & m$pit <= 0.95),
-    pit_low10 = mean(m$pit < 0.1), pit_high10 = mean(m$pit > 0.9),
+    # exact expected randomised-PIT coverage (no random draw, L036)
+    pit_cov50 = mean(m$p_in50), pit_cov90 = mean(m$p_in90),
+    pit_low10 = mean(m$p_low10), pit_high10 = mean(m$p_high10),
     seat_crps = mean(seats$crps), seat_mae_median = mean(abs(seats$median - seats$actual)),
     pit_ks_p = suppressWarnings(stats::ks.test(seats$pit, "punif")$p.value),
     control_brier = mean(control$brier), control_modal_correct = mean(control$modal_correct),
@@ -276,9 +303,28 @@ backtest_grid <- function(bt, cfg, provinces = c(0.10, 0.20, 0.35, 0.55), munis 
            chosen = eligible & seat_crps == min(seat_crps[eligible]))
 }
 
-# 7. Everything together ------------------------------------------------------------------
+# 7. Newcomer module, pre-registered comparison (MODEL-LOG L035) ---------------------------
+#
+# Written down before the result was seen: the 2021 backtest is run with and
+# without the newcomer module, at the chosen settings (fitted premiums,
+# spreads from config.yml). The newcomer prior comes from 2016's newcomers
+# ONLY (2021's own would be circular). Adopt the module if seat CRPS is lower
+# with it AND PIT coverage at 90% (modelled parties) lies in [0.80, 0.97].
 
-run_backtest <- function(bt, cfg) {
+backtest_entrants <- function(bt, cfg, entrant_prior, n_draws, without) {
+  if (is.null(entrant_prior)) return(tibble(note = "no newcomer prior (2011 or 2016 results missing)"))
+  prep <- prepare_chain(bt$inputs, cfg, "fitted", entrant_prior = entrant_prior)
+  with <- score_chain(simulate_chain(prep, cfg, n_draws), bt$truth)
+  bind_rows(mutate(without$summary, module = "without newcomers"),
+            mutate(with$summary, module = "with newcomers")) |>
+    mutate(newcomer_cases = c(0L, nrow(prep$entrants)), rho = entrant_prior$rho,
+           adopt = module == "with newcomers" & seat_crps < min(seat_crps[module == "without newcomers"]) &
+             pit_cov90 >= 0.80 & pit_cov90 <= 0.97, .before = 1)
+}
+
+# 8. Everything together ------------------------------------------------------------------
+
+run_backtest <- function(bt, cfg, entrant_prior = NULL) {
   n <- cfg$backtest$n_draws %||% 1000
   chain_cfg <- run_chain(bt$inputs, cfg, n)
   sc_cfg <- score_chain(chain_cfg, bt$truth)
@@ -295,8 +341,9 @@ run_backtest <- function(bt, cfg) {
   ) |> transmute(rule, seat_mae = seat_mae_median, control_correct = control_modal_correct,
                  ward_correct = ward_modal_correct)
   grid <- backtest_grid(bt, cfg, n_draws = cfg$backtest$grid_draws %||% 400)
+  newcomers <- backtest_entrants(bt, cfg, entrant_prior, n, sc_cfg)
   list(
-    label = bt$label, grid = grid,
+    label = bt$label, grid = grid, newcomers = newcomers,
     summary = bind_rows(mutate(sc_cfg$summary, spreads = "config"), mutate(sc_est$summary, spreads = "estimated")),
     versus_rules = bind_rows(model_rows, naive),
     shock_sds = tibble(parameter = c("province_party", "muni_party"),
@@ -320,7 +367,8 @@ assemble_demo_backtest <- function(d) {
 
 #' Live backtest inputs: 2014 NPE (bulk), 2016 LGE, 2019 NPE, and the 2021
 #' results with the IEC's official 2021 seat calculations as the seat truth.
-assemble_live_backtest <- function(cfg, npe2014_file, lge2016_files, npe_files, lge2021, seat_calc_files, munis) {
+assemble_live_backtest <- function(cfg, npe2014_file, lge2016_files, npe_files, lge2021, seat_calc_files, munis,
+                                   lge2011_files = NULL) {
   prov_names <- unique(munis$province[munis$province_code %in% cfg$model$provinces])
   model_munis <- filter(munis, province_code %in% cfg$model$provinces)
   sc <- map(seat_calc_files, read_iec_seat_calc)
@@ -334,12 +382,24 @@ assemble_live_backtest <- function(cfg, npe2014_file, lge2016_files, npe_files, 
     lge_prev = map_dfr(lge2016_files, read_iec_lge_csv, election = "LGE2016"),
     npe_latest = read_iec_npe_portal(npe_files[str_detect(npe_files, "npe2019")], "NPE2019", prov_names),
     lge_truth = lge2021, councils = councils21, municipalities = model_munis,
-    seat_truth = seat_truth, label = "2021 local election, predicted blind from 2014, 2016 and 2019")
+    seat_truth = seat_truth, label = "2021 local election, predicted blind from 2014, 2016 and 2019") |>
+    c(list(lge2011 = if (length(lge2011_files)) map_dfr(lge2011_files, read_iec_lge_csv, election = "LGE2011") |>
+                       filter(muni_code %in% model_munis$muni_code)))
+}
+
+#' Past newcomers: 2016's (needs 2011) and 2021's, from the backtest data.
+#' The backtest may use only 2016's; the 2026 forecast pools both.
+assemble_first_timers <- function(bt, lge2021) {
+  i <- bt$inputs
+  ft16 <- if (!is.null(bt$lge2011) && nrow(bt$lge2011)) first_timers(i$lge_prev, bt$lge2011, i$npe_prev, 2016)
+  ft21 <- first_timers(filter(lge2021, muni_code %in% i$municipalities$muni_code), i$lge_prev, i$npe_latest, 2021)
+  bind_rows(ft16, ft21)
 }
 
 write_backtest_outputs <- function(res) {
   dir.create(path_public(), showWarnings = FALSE, recursive = TRUE)
   tabs <- list(backtest_summary = mutate(res$summary, label = res$label), backtest_grid = res$grid,
+               backtest_newcomers = res$newcomers,
                backtest_versus_rules = res$versus_rules, backtest_shock_sds = res$shock_sds,
                backtest_party_surprise = res$party_surprise, backtest_seats = res$seats,
                backtest_seats_estimated = res$seats_estimated, backtest_control = res$control,

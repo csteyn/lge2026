@@ -33,7 +33,7 @@ classify_absences <- function(notable, party_status = NULL) {
 }
 
 run_checks <- function(inputs, groups, transfer, baseline, summaries, cfg, seat_validation = NULL,
-                       party_status = NULL, premium = NULL) {
+                       party_status = NULL, premium = NULL, entrant_table = NULL) {
   lge <- inputs$lge2021
   imp_turnout <- lge |> filter(ballot == "PR") |> distinct(muni_code, vd, registered, spoilt, vd_valid) |>
     filter((vd_valid + spoilt) / registered > 1.05)
@@ -151,6 +151,15 @@ run_checks <- function(inputs, groups, transfer, baseline, summaries, cfg, seat_
     out <- bind_rows(out, check_row(
       "C17", "Candidates", "Parties marked not standing whose name is close to a 2026 list name (same party? rule in the register)",
       nrow(nm), paste(sprintf("%s ~ %s", nm$party, nm$name_2026), collapse = "; "), severity = "major"))
+  }
+
+  if (!is.null(entrant_table) && nrow(entrant_table)) {
+    wide_prior_only <- entrant_table |> filter(councils >= 11, !str_starts(basis, "override")) |> distinct(party)
+    out <- bind_rows(out, check_row(
+      "C18", "Newcomers", "Parties standing in 11+ councils with no history, modelled from the class prior (a sourced override may describe them better)",
+      nrow(wide_prior_only),
+      sprintf("%d newcomer cases modelled; %s", nrow(entrant_table), paste(wide_prior_only$party, collapse = ", ")),
+      severity = "minor"))
   }
 
   exp_c <- cfg$expected

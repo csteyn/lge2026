@@ -117,6 +117,9 @@ make_demo_data <- function(seed = 1104) {
     cross_join(tibble(party = c(DEMO_TRUTH$group[-6], "GOLF CONGRESS", "FOXTROT CIVIC"))) |>
     filter(!(party == "FOXTROT CIVIC" & muni_code == "DEM1"),
            !(party == "GOLF CONGRESS" & muni_code == "DEM2"))
+  # a 2026 newcomer with no history, standing in every DEM3 ward (L035)
+  contests <- bind_rows(contests, vd2026 |> filter(muni_code == "DEM3") |> distinct(muni_code, ward_id) |>
+                          mutate(party = "KILO MOVEMENT"))
   pr_lists <- contests |> distinct(muni_code, party) |>
     bind_rows(expand_grid(muni_code = demo_municipalities$muni_code, party = demo_other_parties))
 
@@ -151,4 +154,15 @@ demo_ward_geometry <- function(wards) {
       c(x, y, x + 0.95, y, x + 0.95, y + 0.95, x, y + 0.95, x, y), ncol = 2, byrow = TRUE)))))) |>
     select(muni_code, ward_id, geometry) |>
     sf::st_as_sf()
+}
+
+#' Synthetic past newcomers (demo only): mostly tiny, a few substantial
+make_demo_first_timers <- function(seed = 11) {
+  withr::with_seed(seed, {
+    tibble(year = rep(c(2016, 2021), each = 40), muni_code = sample(c("DEM1", "DEM2", "DEM3"), 80, TRUE),
+           party = sprintf("PAST PARTY %02d", sample(1:30, 80, TRUE)),
+           share = pmin(rlnorm(80, log(0.008), 1.2), 0.3), coverage = sample(c(1, 1, 0.4), 80, TRUE),
+           history_in_province = FALSE) |>
+      mutate(councils = n_distinct(muni_code), .by = c(year, party))
+  })
 }
