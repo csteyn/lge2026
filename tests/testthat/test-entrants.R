@@ -68,3 +68,13 @@ test_that("newcomers are paired: established parties see the same random numbers
   expect_equal(with$seats[, colnames(without$seats)], without$seats)
   expect_equal(with$winners, without$winners)
 })
+
+test_that("newcomers' combined share is compared with history (L043)", {
+  ft <- tibble(year = 2021, muni_code = rep(c("A", "B", "C"), each = 2), share = c(0.01, 0.02, 0.03, 0.01, 0.02, 0.02))
+  draws <- list(A = cbind(P = rep(0.30, 50), Q = rep(0.05, 50)), B = cbind(P = rep(0.01, 50)))
+  et <- entrant_total_check(draws, ft)
+  expect_equal(et$hist_max, 0.04)
+  expect_equal(et$simulated$median_total[et$simulated$muni_code == "A"], 0.35)
+  expect_true(et$simulated$median_total[et$simulated$muni_code == "A"] > et$hist_p95)
+  expect_false(et$simulated$median_total[et$simulated$muni_code == "B"] > et$hist_p95)
+})

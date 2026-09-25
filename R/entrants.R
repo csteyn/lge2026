@@ -141,3 +141,16 @@ read_entrant_overrides <- function(path) {
                       paste(bad$party, collapse = ", "), call. = FALSE)
   mutate(x, party = party_key(party))
 }
+
+#' Newcomers' combined share per council, simulated against history (L043).
+#' Historical totals: every past newcomer's share summed per council and year.
+entrant_total_check <- function(entrant_draws, first_timer_data) {
+  hist <- first_timer_data |> filter(!is.na(share)) |>
+    summarise(total = sum(share), newcomers = n(), .by = c(year, muni_code))
+  sim <- imap_dfr(entrant_draws, \(m, code) tibble(muni_code = code, newcomers = ncol(m),
+                                                  median_total = median(rowSums(m)),
+                                                  q95_total = quantile(rowSums(m), 0.95)))
+  list(history = hist, simulated = sim,
+       hist_p95 = if (nrow(hist)) unname(quantile(hist$total, 0.95)) else NA_real_,
+       hist_max = if (nrow(hist)) max(hist$total) else NA_real_)
+}

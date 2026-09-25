@@ -20,7 +20,7 @@ model:
   # the 2024 baseline, and the placebo parties show a systematic drift there.
   byelection_since: "2024-05-29"
   # Newcomer module (L035). Off until the pre-registered backtest adopts it.
-  entrants: true
+  entrants: false
   entrant_min_cell: 8
   byelection_min_wards: 3
   transfer_b: one

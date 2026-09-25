@@ -141,7 +141,8 @@ list(
 
   # --- checks and publication ------------------------------------------------------
   tar_target(checks, run_checks(scoped, groups, transfer, baseline, summaries, cfg, seat_validation,
-                                  party_status, premium, entrant_table, poll_comparison)),
+                                  party_status, premium, entrant_table, poll_comparison,
+                                  entrant_total_check(entrant_draws, first_timer_data))),
   tar_target(assumptions_file, "data-raw/manual/assumptions.csv", format = "file"),
   tar_target(errata_file, "ERRATA.md", format = "file"),
   tar_target(public, {
