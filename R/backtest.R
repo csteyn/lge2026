@@ -43,6 +43,7 @@ assemble_backtest_inputs <- function(npe_prev, lge_prev, npe_latest, lge_truth, 
   scope <- function(x) filter(x, muni_code %in% keep)
 
   st <- standing_from_results(scope(lge_truth))
+  lp <- scope(lge_prev); nl <- scope(by_vd(npe_latest))
   vd_new <- scope(lge_truth) |> filter(ballot == "PR") |>
     distinct(muni_code, ward_id, vd, registered) |> distinct(muni_code, vd, .keep_all = TRUE)
   list(
@@ -51,8 +52,23 @@ assemble_backtest_inputs <- function(npe_prev, lge_prev, npe_latest, lge_truth, 
                   npe_latest = scope(by_vd(npe_latest)), vd_new = vd_new,
                   councils = scope(councils), contests = st$contests, pr_lists = st$pr_lists,
                   municipalities = municipalities),
-    truth = backtest_truth(scope(lge_truth), scope(councils), seat_truth)
+    truth = c(backtest_truth(scope(lge_truth), scope(councils), seat_truth),
+              list(cases = scoring_cases(st$pr_lists, lp, nl)))
   )
+}
+
+#' The cases every forecast and simple rule is scored on (L037): every party
+#' on a council's ballot, whatever any model does. `established` marks
+#' parties with 2%+ in that council at the previous local or the latest
+#' national election, fixed before the forecast; coverage is measured on them.
+scoring_cases <- function(pr_lists, lge_prev, npe_latest, threshold = 0.02) {
+  prev <- bind_rows(filter(lge_prev, ballot == "PR"), npe_latest) |>
+    summarise(votes = sum(votes), .by = c(muni_code, election, party)) |>
+    mutate(share = votes / sum(votes), .by = c(muni_code, election)) |>
+    summarise(prev_share = max(share), .by = c(muni_code, party))
+  pr_lists |> distinct(muni_code, party) |> filter(party != "INDEPENDENT") |>
+    left_join(prev, by = c("muni_code", "party")) |>
+    mutate(established = coalesce(prev_share, 0) >= threshold) |> select(-prev_share)
 }
 
 #' What actually happened: seats, ward winners and PR shares
@@ -155,7 +171,11 @@ score_chain <- function(chain, truth, seed = 1) {
   seats <- imap_dfr(chain$sims, \(sim, m) {
     s <- sim$seats
     act <- truth$seats |> filter(muni_code == m, seats > 0)
-    cand <- union(colnames(s)[colMeans(s > 0) >= 0.05], act$party)
+    # common case set (L037): every party on the ballot plus every seat winner,
+    # the same for every model; the old rule (seat winners plus parties this
+    # model gave a 5% chance) differed between models and diluted averages
+    cand <- if (!is.null(truth$cases)) union(truth$cases$party[truth$cases$muni_code == m], act$party)
+            else union(colnames(s)[colMeans(s > 0) >= 0.05], act$party)
     map_dfr(cand, \(p) {
       x <- if (p %in% colnames(s)) s[, p] else rep(0L, nrow(s))
       y <- coalesce(act$seats[match(p, act$party)], 0L)
@@ -165,7 +185,9 @@ score_chain <- function(chain, truth, seed = 1) {
              pit = pit_discrete(x, y), crps = crps_int(x, y),
              p_in50 = pit_in(x, y, 0.25, 0.75), p_in90 = pit_in(x, y, 0.05, 0.95),
              p_low10 = pit_in(x, y, 0, 0.1), p_high10 = pit_in(x, y, 0.9, 1),
-             modelled = p %in% colnames(s))
+             modelled = p %in% colnames(s),
+             established = if (!is.null(truth$cases))
+               isTRUE(truth$cases$established[truth$cases$muni_code == m & truth$cases$party == p][1]) else TRUE)
     })
   })
   # council control
@@ -193,7 +215,7 @@ score_chain <- function(chain, truth, seed = 1) {
                 modal_correct = coalesce(top == winner, FALSE))
   })
   blind <- seats |> filter(!modelled, actual > 0)
-  m <- filter(seats, modelled)
+  m <- filter(seats, established) # coverage on a model-independent set fixed in advance (L037)
   summary <- tibble(
     seat_intervals = nrow(seats),
     coverage50 = mean(seats$in50), coverage90 = mean(seats$in90),
@@ -238,8 +260,12 @@ naive_rule <- function(inp, truth, source = c("previous_local", "national_as_is"
                      no_list_wards = max(0, nw - sum(w$n))) |> select(party, pred_seats = seats)
     })) |> select(muni_code, alloc) |> unnest(alloc)
   cmp <- full_join(seats, rename(truth$seats, actual = seats), by = c("muni_code", "party")) |>
-    mutate(across(c(pred_seats, actual), \(x) coalesce(as.integer(x), 0L))) |>
-    filter(pred_seats > 0 | actual > 0)
+    mutate(across(c(pred_seats, actual), \(x) coalesce(as.integer(x), 0L)))
+  cmp <- if (!is.null(truth$cases)) { # the common case set, as for the model (L037)
+    truth$cases |> select(muni_code, party) |>
+      full_join(filter(cmp, pred_seats > 0 | actual > 0), by = c("muni_code", "party")) |>
+      mutate(across(c(pred_seats, actual), \(x) coalesce(x, 0L)))
+  } else filter(cmp, pred_seats > 0 | actual > 0)
   ctrl <- cmp |> nest(.by = muni_code) |>
     mutate(ok = map2_lgl(muni_code, data, \(m, d) {
       B <- inp$councils$total_seats[inp$councils$muni_code == m]; maj <- floor(B / 2) + 1
@@ -315,8 +341,14 @@ backtest_entrants <- function(bt, cfg, entrant_prior, n_draws, without) {
   if (is.null(entrant_prior)) return(tibble(note = "no newcomer prior (2011 or 2016 results missing)"))
   prep <- prepare_chain(bt$inputs, cfg, "fitted", entrant_prior = entrant_prior)
   with <- score_chain(simulate_chain(prep, cfg, n_draws), bt$truth)
+  # paired difference on the common cases, with a bootstrap over councils
+  d <- inner_join(select(without$seats, muni_code, party, c0 = crps), select(with$seats, muni_code, party, c1 = crps),
+                  by = c("muni_code", "party")) |> summarise(diff = sum(c1 - c0), n = n(), .by = muni_code)
+  boot <- withr::with_seed(1, replicate(2000, { i <- sample.int(nrow(d), replace = TRUE); sum(d$diff[i]) / sum(d$n[i]) }))
   bind_rows(mutate(without$summary, module = "without newcomers"),
             mutate(with$summary, module = "with newcomers")) |>
+    mutate(crps_diff = c(NA, sum(d$diff) / sum(d$n)), crps_diff_lo = c(NA, quantile(boot, 0.05)),
+           crps_diff_hi = c(NA, quantile(boot, 0.95))) |>
     mutate(newcomer_cases = c(0L, nrow(prep$entrants)), rho = entrant_prior$rho,
            adopt = module == "with newcomers" & seat_crps < min(seat_crps[module == "without newcomers"]) &
              pit_cov90 >= 0.80 & pit_cov90 <= 0.97, .before = 1)

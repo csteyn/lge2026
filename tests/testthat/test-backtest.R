@@ -70,3 +70,16 @@ test_that("scoring is exact and deterministic, however the call is written (L036
   expect_equal(inline$seat_crps, stored$seat_crps)
   expect_equal(inline$pit_cov90, stored$pit_cov90)
 })
+
+test_that("all models are scored on the same cases, so extra easy cases cannot dilute a score (L037)", {
+  ch <- run_chain(bt$inputs, cfg, n_draws = 100)
+  s1 <- score_chain(ch, bt$truth)
+  ch2 <- ch # the same forecast plus a party it gives zero seats (as a model with more parties would)
+  ch2$sims <- lapply(ch2$sims, \(s) { s$seats <- cbind(s$seats, `EXTRA PARTY` = 0L); s })
+  s2 <- score_chain(ch2, bt$truth)
+  expect_equal(s2$summary$seat_intervals, s1$summary$seat_intervals)
+  expect_equal(s2$summary$seat_crps, s1$summary$seat_crps)
+  expect_equal(nrow(s1$seats), nrow(distinct(bind_rows(select(bt$truth$cases, muni_code, party),
+                                                     select(filter(bt$truth$seats, seats > 0), muni_code, party)))))
+  expect_true(all(c("established") %in% names(bt$truth$cases)))
+})

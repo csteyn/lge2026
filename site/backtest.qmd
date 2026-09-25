@@ -23,7 +23,7 @@ if (!have) {
 
 ## Against the simple rules
 
-A forecast model is only worth its complexity if it beats simple rules: repeat the previous local election, or use the latest national vote as it stands.
+A forecast model is only worth its complexity if it beats simple rules: repeat the previous local election, or use the latest national vote as it stands. Every forecast and rule is scored on the same cases: every party on each council's ballot (see [corrections](corrections.qmd), E1).
 
 ```{r}
 if (have) rd("backtest_versus_rules.csv") |>
@@ -98,6 +98,8 @@ if (file.exists(pub("backtest_newcomers.csv"))) {
               `90% coverage (PIT)` = pct(pit_cov90), `Seat error` = round(seat_mae_median, 2),
               `Council control correct` = pct(control_modal_correct), `Ward winners correct` = pct(ward_modal_correct),
               `Seats won by unseen parties` = new_entrant_seats,
+              `Paired CRPS difference (90% interval)` = if_else(is.na(crps_diff), "",
+                sprintf("%.3f (%.3f to %.3f)", crps_diff, crps_diff_lo, crps_diff_hi)),
               Decision = if_else(module == "with newcomers", if_else(adopt, "adopt", "do not adopt"), "")) |>
     knitr::kable()
   else cat(x$note[1])
