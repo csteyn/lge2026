@@ -92,11 +92,13 @@ list(
   tar_target(scoped, scope_inputs(inputs, model_munis)),
   tar_target(groups, define_party_groups(scoped$lge2021, scoped$npe2024, cfg, scoped$pr_lists)),
   tar_target(other_w, other_composition(groups, scoped$lge2021, scoped$npe2024)),
-  tar_target(transfer, fit_transfer(scoped$npe2019, scoped$lge2021, groups, cfg)),
+  tar_target(transfer, apply_transfer_variant(fit_transfer(scoped$npe2019, scoped$lge2021, groups, cfg),
+                                              cfg$model$transfer_b %||% "fitted", cfg$model$premium_shrink %||% 1)),
   tar_target(contests_g, if (is.null(scoped$contests)) NULL else scoped$contests |>
                inner_join(select(groups, muni_code, party, group), by = c("muni_code", "party")) |>
                distinct(muni_code, ward_id, group)),
-  tar_target(baseline, build_baseline(scoped$npe2024, scoped$lge2021, scoped$vd2026, groups, transfer, contests_g)),
+  tar_target(baseline, build_baseline(scoped$npe2024, scoped$lge2021, scoped$vd2026, groups, transfer, contests_g,
+                                      ward_ratio = cfg$model$ward_ratio %||% TRUE)),
   tar_target(swing_file, "data-raw/manual/swing_priors.csv", format = "file"),
   tar_target(swing, read_csv(swing_file, comment = "#", show_col_types = FALSE, col_types = "ccddcc")),
   # parties without a fitted transfer: local premium as a distribution (L022)

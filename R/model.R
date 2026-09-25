@@ -113,7 +113,7 @@ fit_transfer <- function(npe_prev, lge_prev, groups, cfg) {
   local <- groups |> filter(origin == "local_only")
   if (nrow(g) == 0) stop("fit_transfer(): no national party groups to fit; groups table is empty upstream",
                          call. = FALSE)
-  x <- group_shares(npe_prev, g) |> select(muni_code, vd, group, clr_npe = clr, total_npe = total)
+  x <- group_shares(npe_prev, g) |> select(muni_code, vd, group, clr_npe = clr, total_npe = total, share_npe = share)
   y <- lge_prev |>
     filter(ballot == "PR") |>
     anti_join(local, by = c("muni_code", "party")) |>
@@ -157,12 +157,48 @@ fit_transfer <- function(npe_prev, lge_prev, groups, cfg) {
   sd_ward <- sd(ward_means$e_w, na.rm = TRUE)
   sd_vd <- sd(within$e_vd, na.rm = TRUE)
 
+  # Errors-in-variables correction (L039). The 2019 shares are themselves
+  # sampled: a share p among n votes has log-scale sampling variance of about
+  # (1 - p) / (n p). The fraction of a party's observed spatial variance that
+  # is real (its reliability, lambda) attenuates the fitted slope, b = b_true
+  # x lambda (L003: 0.78 fitted against 0.90 true on demo data). Corrected
+  # slope b / lambda; intercept re-set so the line keeps the weighted means.
+  # The noise of the clr mean term is ignored (small with several parties).
+  wvar <- function(x, w) sum(w * (x - sum(w * x) / sum(w))^2) / sum(w)
+  corr <- xy |>
+    summarise(noise = weighted.mean((1 - share_npe) / (total_npe * share_npe), total_lge),
+              var_x = wvar(clr_npe, total_lge),
+              mx = weighted.mean(clr_npe, total_lge), my = weighted.mean(clr_lge, total_lge),
+              a_one = weighted.mean(clr_lge - clr_npe, total_lge), .by = group) |>
+    mutate(lambda = pmin(1, pmax(0.2, 1 - noise / var_x)))
+  coefs <- coefs |> left_join(corr, by = "group") |>
+    mutate(b_corr = if_else(default_used, 1, pmin(b / lambda, 2)),
+           a_corr = if_else(default_used, 0, my - b_corr * mx),
+           a_one = if_else(default_used, 0, a_one),
+           lambda = coalesce(lambda, 1))
+
   list(
-    coefs = select(coefs, group, n_vd, a, b, default_used),
+    coefs = select(coefs, group, n_vd, a, b, default_used, lambda, a_corr, b_corr, a_one),
     sd_ward = sd_ward,
     sd_vd = sd_vd,
     n_pairs = nrow(xy)
   )
+}
+
+#' Choose how the fitted translation is carried forward (L039):
+#'   b_mode "fitted"     slopes and intercepts as fitted (attenuated slopes)
+#'          "corrected"  errors-in-variables corrected slopes, matching intercepts
+#'          "one"        slope fixed at 1 (the national pattern unsquashed)
+#'   shrink              multiplies every fitted premium (1 = as fitted)
+apply_transfer_variant <- function(transfer, b_mode = c("fitted", "corrected", "one"), shrink = 1) {
+  b_mode <- match.arg(b_mode)
+  cf <- transfer$coefs
+  if (b_mode == "corrected") cf <- mutate(cf, a = if_else(default_used, a, a_corr), b = if_else(default_used, b, b_corr))
+  if (b_mode == "one") cf <- mutate(cf, a = if_else(default_used, a, a_one), b = 1)
+  cf <- mutate(cf, a = if_else(default_used, a, a * shrink))
+  transfer$coefs <- cf
+  transfer$variant <- list(b_mode = b_mode, shrink = shrink)
+  transfer
 }
 
 # 3. Baseline for every 2026 voting district --------------------------------------
@@ -214,7 +250,7 @@ impute_registration <- function(vd_new, fallback = NULL) {
     mutate(reg_imputed = reg_source != "MDB REGPOP")
 }
 
-build_baseline <- function(npe_latest, lge_prev, vd_new, groups, transfer, contests = NULL) {
+build_baseline <- function(npe_latest, lge_prev, vd_new, groups, transfer, contests = NULL, ward_ratio = TRUE) {
   vd_new <- impute_registration(vd_new, fallback = distinct(npe_latest, muni_code, vd, registered))
   national <- groups |> filter(origin != "local_only")
   local <- groups |> filter(origin == "local_only") |> distinct(muni_code, group)
@@ -285,7 +321,7 @@ build_baseline <- function(npe_latest, lge_prev, vd_new, groups, transfer, conte
     mutate(turnout = coalesce(turnout, wmean(turnout, registered)), .by = muni_code) |>
     mutate(turnout = coalesce(turnout, overall_turnout)) |>
     left_join(ward_pr_ratio(lge_prev, groups), by = c("muni_code", "group")) |>
-    mutate(log_ward_ratio = coalesce(log_ward_ratio, 0))
+    mutate(log_ward_ratio = if (ward_ratio) coalesce(log_ward_ratio, 0) else 0) # ratio off: L039
 
   # contestation: which groups have a ward candidate in which 2026 ward
   if (is.null(contests)) {

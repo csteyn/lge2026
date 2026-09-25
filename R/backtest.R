@@ -102,16 +102,18 @@ backtest_truth <- function(lge_truth, councils, seat_truth = NULL) {
 #' intercepts = "fitted" carries each party's learned local premium `a` into
 #' the next cycle; "zero" keeps only the learned spatial structure `b`
 #' (the backtest showed the premiums do not transfer between cycles, L027).
-prepare_chain <- function(inp, cfg, intercepts = c("fitted", "zero"), entrant_prior = NULL, entrant_overrides = NULL) {
+prepare_chain <- function(inp, cfg, intercepts = c("fitted", "zero"), entrant_prior = NULL, entrant_overrides = NULL,
+                          b_mode = cfg$model$transfer_b %||% "fitted", ward_ratio = cfg$model$ward_ratio %||% TRUE,
+                          shrink = cfg$model$premium_shrink %||% 1) {
   intercepts <- match.arg(intercepts)
   groups <- define_party_groups(inp$lge_prev, inp$npe_latest, cfg, inp$pr_lists)
   ow <- other_composition(groups, inp$lge_prev, inp$npe_latest)
-  tr <- fit_transfer(inp$npe_prev, inp$lge_prev, groups, cfg)
+  tr <- apply_transfer_variant(fit_transfer(inp$npe_prev, inp$lge_prev, groups, cfg), b_mode, shrink)
   if (intercepts == "zero") tr$coefs$a <- 0
   cg <- if (is.null(inp$contests)) NULL else inp$contests |>
     inner_join(select(groups, muni_code, party, group), by = c("muni_code", "party")) |>
     filter(group != "ABSENT") |> distinct(muni_code, ward_id, group)
-  base <- build_baseline(inp$npe_latest, inp$lge_prev, inp$vd_new, groups, tr, cg)
+  base <- build_baseline(inp$npe_latest, inp$lge_prev, inp$vd_new, groups, tr, cg, ward_ratio = ward_ratio)
   # with zero intercepts there is no learned premium to draw an unfitted party's from
   prem <- if (intercepts == "fitted") local_premium(groups, tr) else NULL
   entrants <- if (!is.null(entrant_prior)) find_entrants(inp$pr_lists, inp$contests, groups) else tibble()
@@ -209,7 +211,7 @@ score_chain <- function(chain, truth, seed = 1) {
       left_join(rename(w, winner = party), by = c("ward_id", "winner")) |>
       mutate(p = coalesce(p, 0)) |>
       left_join(w |> summarise(sum_p2 = sum(p^2), top = party[which.max(p)], .by = ward_id), by = "ward_id") |>
-      transmute(muni_code, ward_id, winner, p_actual = p,
+      transmute(muni_code, ward_id, winner, p_actual = p, model_pick = top,
                 brier = (1 - p)^2 + coalesce(sum_p2, 0) - p^2,
                 log_score = log(pmax(p, 0.5 / chain$n_draws)),
                 modal_correct = coalesce(top == winner, FALSE))
@@ -273,8 +275,10 @@ naive_rule <- function(inp, truth, source = c("previous_local", "national_as_is"
       f(d$pred_seats) == f(d$actual)
     }))
   wr <- truth$winners |> left_join(winners, by = c("muni_code", "ward_id"))
-  tibble(rule = source, seat_mae = mean(abs(cmp$pred_seats - cmp$actual)),
-         control_correct = mean(ctrl$ok), ward_correct = mean(coalesce(wr$pred == wr$winner, FALSE)))
+  out <- tibble(rule = source, seat_mae = mean(abs(cmp$pred_seats - cmp$actual)),
+                control_correct = mean(ctrl$ok), ward_correct = mean(coalesce(wr$pred == wr$winner, FALSE)))
+  attr(out, "wards") <- select(wr, muni_code, ward_id, pred)
+  out
 }
 
 # 5. Estimating the A02 shock sizes ----------------------------------------------------
@@ -354,7 +358,46 @@ backtest_entrants <- function(bt, cfg, entrant_prior, n_draws, without) {
              pit_cov90 >= 0.80 & pit_cov90 <= 0.97, .before = 1)
 }
 
-# 8. Everything together ------------------------------------------------------------------
+# 8. The ward-winner gap (O7): pre-registered experiment (MODEL-LOG L039) -----------------
+#
+# Written down before any result: 12 variants = slopes {fitted, corrected for
+# attenuation, fixed at 1} x ward/PR ticket-splitting ratio {on, off} x
+# learned premiums {as fitted, halved}, all at the spreads and newcomer setting
+# in config.yml. Rule: choose the lowest mean ward Brier score among variants
+# whose mean seat CRPS is at most 0.005 worse than the current model's and whose
+# established-party 90% coverage is in [0.80, 0.97]; adopt it only if its ward
+# Brier score beats the current model's. If none qualifies, nothing changes.
+# Everything else is reported.
+
+backtest_ward_grid <- function(bt, cfg, entrant_prior = NULL, n_draws = 400) {
+  ep <- if (isTRUE(cfg$model$entrants)) entrant_prior else NULL
+  g <- tidyr::expand_grid(b_mode = c("fitted", "corrected", "one"), ward_ratio = c(TRUE, FALSE), shrink = c(1, 0.5)) |>
+    pmap_dfr(\(b_mode, ward_ratio, shrink) {
+      prep <- prepare_chain(bt$inputs, cfg, "fitted", entrant_prior = ep, b_mode = b_mode,
+                            ward_ratio = ward_ratio, shrink = shrink)
+      sc <- score_chain(simulate_chain(prep, cfg, n_draws), bt$truth)
+      mutate(sc$summary, b_mode = b_mode, ward_ratio = ward_ratio, shrink = shrink, .before = 1)
+    })
+  cur <- g$b_mode == "fitted" & g$ward_ratio & g$shrink == 1
+  g |> mutate(current = cur,
+              eligible = seat_crps <= seat_crps[cur] + 0.005 & pit_cov90 >= 0.80 & pit_cov90 <= 0.97,
+              best = eligible & ward_brier == min(ward_brier[eligible]),
+              adopt = best & !current & ward_brier < ward_brier[cur])
+}
+
+#' Which wards the model loses, and whether the simple rules win them
+ward_diagnostics <- function(sc, naive_prev, naive_nat) {
+  sc$wards |>
+    left_join(rename(attr(naive_nat, "wards"), national_pick = pred), by = c("muni_code", "ward_id")) |>
+    left_join(rename(attr(naive_prev, "wards"), previous_pick = pred), by = c("muni_code", "ward_id")) |>
+    mutate(model_right = modal_correct, national_right = coalesce(national_pick == winner, FALSE),
+           case = case_when(model_right & national_right ~ "both right",
+                            !model_right & national_right ~ "model wrong, national vote right",
+                            model_right & !national_right ~ "model right, national vote wrong",
+                            TRUE ~ "both wrong"))
+}
+
+# 9. Everything together ------------------------------------------------------------------
 
 run_backtest <- function(bt, cfg, entrant_prior = NULL) {
   n <- cfg$backtest$n_draws %||% 1000
@@ -364,8 +407,9 @@ run_backtest <- function(bt, cfg, entrant_prior = NULL) {
   chain_est <- run_chain(bt$inputs, cfg, n,
                          sd_override = list(province_party = sds$province, muni_party = sds$muni))
   sc_est <- score_chain(chain_est, bt$truth)
-  naive <- bind_rows(naive_rule(bt$inputs, bt$truth, "previous_local"),
-                     naive_rule(bt$inputs, bt$truth, "national_as_is"))
+  np <- naive_rule(bt$inputs, bt$truth, "previous_local"); nn <- naive_rule(bt$inputs, bt$truth, "national_as_is")
+  naive <- bind_rows(np, nn)
+  wards_diag <- ward_diagnostics(sc_cfg, np, nn)
   model_rows <- bind_rows(
     mutate(sc_cfg$summary, rule = sprintf("model, config spreads (%.2f / %.2f)",
                                           cfg$model$sd$province_party, cfg$model$sd$muni_party)),
@@ -374,8 +418,9 @@ run_backtest <- function(bt, cfg, entrant_prior = NULL) {
                  ward_correct = ward_modal_correct)
   grid <- backtest_grid(bt, cfg, n_draws = cfg$backtest$grid_draws %||% 400)
   newcomers <- backtest_entrants(bt, cfg, entrant_prior, n, sc_cfg)
+  ward_grid <- backtest_ward_grid(bt, cfg, entrant_prior, n_draws = cfg$backtest$grid_draws %||% 400)
   list(
-    label = bt$label, grid = grid, newcomers = newcomers,
+    label = bt$label, grid = grid, newcomers = newcomers, ward_grid = ward_grid, wards = wards_diag,
     summary = bind_rows(mutate(sc_cfg$summary, spreads = "config"), mutate(sc_est$summary, spreads = "estimated")),
     versus_rules = bind_rows(model_rows, naive),
     shock_sds = tibble(parameter = c("province_party", "muni_party"),
@@ -431,7 +476,8 @@ assemble_first_timers <- function(bt, lge2021) {
 write_backtest_outputs <- function(res) {
   dir.create(path_public(), showWarnings = FALSE, recursive = TRUE)
   tabs <- list(backtest_summary = mutate(res$summary, label = res$label), backtest_grid = res$grid,
-               backtest_newcomers = res$newcomers,
+               backtest_newcomers = res$newcomers, backtest_ward_grid = res$ward_grid,
+               backtest_wards = res$wards,
                backtest_versus_rules = res$versus_rules, backtest_shock_sds = res$shock_sds,
                backtest_party_surprise = res$party_surprise, backtest_seats = res$seats,
                backtest_seats_estimated = res$seats_estimated, backtest_control = res$control,

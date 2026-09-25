@@ -106,6 +106,28 @@ if (file.exists(pub("backtest_newcomers.csv"))) {
 }
 ```
 
+## Ward winners: a pre-registered experiment
+
+In the 2021 backtest the model picked fewer ward winners correctly than simply using the latest national vote. Twelve variants were compared, with the rule fixed in the [model log](log.qmd) before the result: slopes as fitted, corrected for noise in the 2019 shares, or fixed at 1; the ward/PR ticket-splitting ratio on or off; learned premiums as fitted or halved. The winner has the lowest ward Brier score among variants that are no more than 0.005 worse on seat CRPS and stay calibrated. It is adopted only if it beats the current model.
+
+```{r}
+if (file.exists(pub("backtest_ward_grid.csv"))) rd("backtest_ward_grid.csv") |>
+  arrange(ward_brier) |>
+  transmute(Slopes = b_mode, `Ticket-split ratio` = if_else(ward_ratio, "on", "off"), Premiums = if_else(shrink == 1, "as fitted", "halved"),
+            `Ward Brier` = round(ward_brier, 4), `Ward winners correct` = pct(ward_modal_correct, 1),
+            `Seat CRPS` = round(seat_crps, 4), `90% coverage` = pct(pit_cov90),
+            Result = case_when(adopt ~ "adopted", current ~ "current model", best ~ "best, not better than current",
+                               !eligible ~ "worse on seats or calibration", TRUE ~ "")) |>
+  knitr::kable()
+```
+
+```{r}
+if (file.exists(pub("backtest_wards.csv"))) {
+  w <- rd("backtest_wards.csv")
+  w |> count(case, name = "Wards") |> rename(Outcome = case) |> knitr::kable()
+}
+```
+
 ## What the model could not see
 
 ```{r}
