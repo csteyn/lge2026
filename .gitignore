@@ -24,3 +24,6 @@ outputs/archive/
 .httr-oauth
 .DS_Store
 .quarto
+
+# Office lock files (e.g. a document open in Word)
+~$*
