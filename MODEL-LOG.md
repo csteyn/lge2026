@@ -4,8 +4,8 @@ A running engineering record: decisions with their reasons, errors found (includ
 
 ## Open obstacles
 
-- **O13. The translation does not reproduce its own election's totals.** Under test in L049 (intercepts calibrated to totals).
-- **O12. Heteroscedastic spreads.** Under test in L049 (one spread per party, net of sampling noise).
+- **O13. The translation does not reproduce its own election's totals. Tested in L050; not adopted.** Calibrating the intercepts fixes the totals without noise, but on its own it makes the noisy model's closure worse and the 2021 ANC forecast worse.
+- **O12. One pooled spread for every party. Tested in L050; not adopted; the most promising route.** Party-specific spreads (variant D) nearly halved the closure error and gave the best ward Brier of any model tested, but missed the closure threshold (1.26 against 1.0 points) and the control guard (+0.022 against 0.02). Thresholds are not relaxed after the fact (L050). The unresolved choice is shown to readers as a sensitivity (L048).
 - **O11. Resolved (L048).** The backtest's headline run now includes newcomers when they are on.
 - **O10. The ANC's position (L046-L047).** The decomposition finds no single mechanical cause: its fall from the 2024 result is spread across turnout, its learned local premium (the largest step), the PA, newcomers and the simulation step. The one available test, 2021, over-predicted the ANC by about four points, so on the evidence the model is more likely to over- than under-state it in a local election. The gap with Ipsos may be a real disagreement between the model and the poll. Open until L047 is decided, since that test moves the ANC too.
 - **O9. Resolved (L046).** Newcomer model v2 passed its pre-registered test at the adopted settings and is in use.
@@ -19,6 +19,27 @@ A running engineering record: decisions with their reasons, errors found (includ
 - **O5. Resolved for the Patriotic Alliance (L023).** The National Coloured Congress, the People's Movement for Change and the ATM have too little by-election evidence and keep the prior; their intervals are correspondingly wide.
 
 ## 2026-09-26
+
+**L050. No variant qualifies under the L049 rule; the model is unchanged. The model is frozen for 2026 unless new evidence arrives.** The rule was pushed before the run (commit `1ae6e5d`), and the run used exactly that commit (`run_meta.csv`).
+
+| Variant | Seat CRPS | vs A (90% interval) | Closure error | 90% cov. | Ward Brier | Control Brier (councils right) | DA 2021 | ANC 2021 | Fails |
+|---|---|---|---|---|---|---|---|---|---|
+| A current | 0.3816 | | 2.21 pts | 88.1% | 0.1513 | 0.236 (22) | 53.7% | 24.3% | (fallback) |
+| B calibrated | 0.3840 | +0.003 (-0.006 to +0.010) | 2.53 pts | 88.9% | 0.1483 | 0.215 (22) | 52.7% | 25.4% | closure |
+| C calibrated, mean-preserving | 0.3996 | +0.018 (+0.005 to +0.033) | 0.52 pts | 86.7% | 0.1430 | 0.303 (18) | 56.5% | 25.8% | control, seats |
+| D calibrated, party spreads | 0.3865 | +0.005 (-0.003 to +0.014) | 1.26 pts | 87.0% | **0.1395** | 0.258 (21) | 55.1% | 25.5% | closure, control |
+| E calibrated, party spreads, mean-preserving | 0.3977 | +0.016 (+0.004 to +0.030) | 0.52 pts | 86.4% | 0.1398 | 0.300 (18) | 56.3% | 25.8% | control, seats |
+
+Actual 2021: DA 54.7%, ANC 20.5%. **Nothing qualifies, so nothing changes.**
+
+*What the experiment shows.*
+- **Noise convexity is the larger in-sample defect, not the intercepts.** Calibrating the intercepts alone (B) reproduces the fitted totals without noise, but the pooled noise then pulls the DA further below them. Closure gets worse, from 2.21 to 2.53 points; in 2021 Western Cape the DA comes out at 54.8% against 59.9%.
+- **Party-specific spreads (D) are the most promising variant, and still fail.** They nearly halve the closure error and give the best ward Brier of any model tested in this project (0.1395 against 0.1513). Seats are indistinguishable from the current model. D misses two thresholds narrowly: closure (1.26 against 1.0 points) and control (+0.022 against 0.02). **The thresholds are not relaxed after seeing this.** Doing so would turn a pre-registered test into a search.
+- **Out of sample, reproducing the fitted elections pushes the DA up and the ANC up.** Every variant that reproduces the fitted elections better also predicts a higher DA in 2021 (55.1% to 56.5%, against 54.7% actual), and C and E cost four councils on control. Calibration raises the ANC in 2021 (25.4% to 25.8%, against 20.5%), because the ANC's in-sample understatement did not carry into an election where it fell sharply. Neither defect can be fixed on the 2016-2021 evidence without the backtest objecting.
+
+*Decision: freeze.* The same 2021 backtest has now judged four experiments on this question (L045, L047, L049, and the ward experiment L039). Each further test on it spends more of its credibility as out-of-sample evidence. The model is therefore frozen as it stands for the 2026 forecast, and reopened only if genuinely new evidence arrives. Ward by-elections since 2021 would be a candidate for testing ward-level spreads independently, under a rule fixed before looking. What readers get instead is the unresolved choice, shown openly: the noise sensitivity on the Backtest page (L048), the share decomposition on the Polls page (L046), and assumptions A21-A23.
+
+*An error in delivering L049, with no effect on the test.* L049's code was written straight into the maintainer's project folder. A second write, which added three reporting columns to the decision table and one test, did not reach the folder: the bridge delivered the earlier version of both files, and the write was not re-checked. The registered commit, and the run, therefore lack those reporting columns. The rule's code, `calibration_decision()`, is identical in both versions, so the decision is unaffected. The two files are written again now, and checked after writing. **Lesson:** every write to the maintainer's folder is verified by reading it back.
 
 **L049. The L048 run checked; O12 and O13 built and pre-registered as one experiment with a closure test per variant.** Nothing in this entry was written after a result from the new code had been read.
 

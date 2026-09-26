@@ -126,6 +126,7 @@ backtest_calibration_grid <- function(bt, cfg, entrant_prior = NULL, n_draws = 4
     sc <- score_chain(ch, bt$truth)
     ps <- province_vote_share(ch$sims, prep$baseline)
     list(summary = mutate(sc$summary, variant = variant, description = description,
+                          premium_calibration = premium_calibration, spreads = spreads, noise_centring = noise_centring,
                           da_pred = share_of(ps, "DEMOCRATIC ALLIANCE"), da_actual = share_of(actual, "DEMOCRATIC ALLIANCE", "share"),
                           anc_pred = share_of(ps, "AFRICAN NATIONAL CONGRESS"), anc_actual = share_of(actual, "AFRICAN NATIONAL CONGRESS", "share"),
                           .before = 1),

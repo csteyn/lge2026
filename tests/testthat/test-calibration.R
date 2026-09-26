@@ -53,6 +53,13 @@ test_that("the L049 rule is applied as written", {
   expect_equal(sum(calibration_decision(mutate(grid, crps_diff_lo = 0.001), cl)$adopt), 0)
 })
 
+test_that("the grid carries each variant's settings, ready to copy into config.yml", {
+  g <- backtest_calibration_grid(assemble_demo_backtest(d), cfg, NULL, n_draws = 20)
+  expect_equal(nrow(g), 5); expect_equal(sum(g$current), 1)
+  expect_true(all(c("premium_calibration", "spreads", "noise_centring") %in% names(g)))
+  expect_equal(g$crps_diff, g$seat_crps - g$seat_crps[g$current], tolerance = 1e-8)
+})
+
 test_that("the current configuration maps to exactly one variant", {
   expect_equal(current_variant(cfg), "A")
   expect_error(current_variant(variant_cfg(cfg, "none", "party", "mean")), "match no")

@@ -210,8 +210,12 @@ if (file.exists(pub("noise_sensitivity.csv"))) {
 The noise experiment above exposed two defects that offset each other in 2021 ([model log](log.qmd) L048). Predicting its own election, the translation overstated the DA and understated the ANC (O13). One pooled noise spread, dominated by small parties' sampling noise, pulled the DA down (O12). Five variants fix these singly and together. Each is scored on the 2021 backtest and on whether it reproduces the elections it was fitted on. The rule was fixed in L049 before any result: a variant must reproduce its own elections to within a point, stay calibrated, lose no more than 0.005 on ward Brier and 0.02 on council control, and not be demonstrably worse on seats. The lowest seat CRPS among qualifying variants is adopted.
 
 ```{r}
+#| results: asis
 if (file.exists(pub("calibration_decision.csv"))) {
-  rd("calibration_decision.csv") |>
+  cd <- rd("calibration_decision.csv")
+  cat(if (any(cd$adopt)) sprintf("**Result:** variant %s adopted.\n\n", cd$variant[cd$adopt]) else
+    "**Result:** no variant qualified, so the model is unchanged and frozen for 2026 (L050). Variant D came closest, with the best ward Brier of any model tested, but missed the closure threshold and the control guard narrowly; the thresholds were not relaxed after the fact.\n\n")
+  cd |>
     transmute(Variant = paste(variant, description, sep = ": "), `Seat CRPS` = round(seat_crps, 4),
               `vs current (90% interval)` = if_else(current, "", sprintf("%+.4f (%+.4f to %+.4f)", crps_diff, crps_diff_lo, crps_diff_hi)),
               `Closure error` = sprintf("%.1f pts", 100 * closure_mae), `90% coverage` = pct(pit_cov90),
@@ -221,7 +225,7 @@ if (file.exists(pub("calibration_decision.csv"))) {
                                  !closure_ok ~ "fails closure", !seats_ok ~ "worse on seats",
                                  !coverage_ok ~ "fails coverage", !ward_ok ~ "fails ward guard",
                                  !control_ok ~ "fails control guard", TRUE ~ "")) |>
-    knitr::kable()
+    knitr::kable() |> print()
 }
 ```
 
