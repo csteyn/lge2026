@@ -168,6 +168,21 @@ list(
   # --- backtest: predict 2021 blind, score it, estimate the A02 spreads (L026)
   tar_target(backtest, run_backtest(backtest_inputs, cfg, backtest_entrant_prior), error = "continue"),
   tar_target(backtest_public, write_backtest_outputs(backtest), format = "file", error = "continue"),
+  # --- L047: noise centring, a pre-registered experiment, and a closure test
+  tar_target(noise_grid, backtest_noise_grid(backtest_inputs, cfg, backtest_entrant_prior,
+                                             cfg$backtest$grid_draws %||% 400), error = "continue"),
+  tar_target(closure, {
+    interp <- identical(cfg$model$premium_basis, "interpolated")
+    bi <- backtest_inputs$inputs
+    closure_test(list(
+      closure_cycle(bi$npe_prev, bi$lge_prev, define_party_groups(bi$lge_prev, bi$npe_latest, cfg, bi$pr_lists), cfg,
+                    "2014 national to 2016 local", npe_next = if (interp) bi$npe_latest, frac = if (interp) bi$interp_frac),
+      closure_cycle(scoped$npe2019, scoped$lge2021, groups, cfg, "2019 national to 2021 local",
+                    npe_next = if (interp) scoped$npe2024,
+                    frac = if (interp) interp_frac(cfg$dates$npe2019, cfg$dates$lge2021, cfg$dates$npe2024))))
+  }, error = "continue"),
+  tar_target(noise_verdict, noise_decision(noise_grid, closure, cfg), error = "continue"),
+  tar_target(noise_public, write_noise_outputs(noise_grid, closure, noise_verdict), format = "file", error = "continue"),
 
   tar_target(site_pages, {
     public; errata_file

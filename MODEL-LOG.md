@@ -4,7 +4,9 @@ A running engineering record: decisions with their reasons, errors found (includ
 
 ## Open obstacles
 
-- **O10. The ANC is under-predicted against both the poll and 2024, and the interpolated basis did not change that (L046).** The ANC's forecast share barely moved when the premium basis changed. A step-by-step decomposition from the 2024 result to the forecast (L046) will show which ingredient pulls it down; candidate mechanisms are listed there before the result. The poll gap is not a target.
+- **O12. Heteroscedastic spreads.** One ward spread and one district spread serve every party, estimated from residuals dominated by small parties' sampling noise. Even if L047 removes the bias this causes in expectation, a dominant party's intervals stay too wide. A spread net of sampling noise, or by share level, would need its own pre-registered test.
+- **O11. The backtest's headline run excludes newcomers**, though they are now in the forecast (L046). The L047 experiment runs with them. The headline is aligned after L047 is decided, so the reference numbers do not move mid-experiment.
+- **O10. The ANC's position (L046-L047).** The decomposition finds no single mechanical cause: its fall from the 2024 result is spread across turnout, its learned local premium (the largest step), the PA, newcomers and the simulation step. The one available test, 2021, over-predicted the ANC by about four points, so on the evidence the model is more likely to over- than under-state it in a local election. The gap with Ipsos may be a real disagreement between the model and the poll. Open until L047 is decided, since that test moves the ANC too.
 - **O9. Resolved (L046).** Newcomer model v2 passed its pre-registered test at the adopted settings and is in use.
 - **O7. Largely resolved (L040).** On ward Brier score the model now beats the national-vote rule (0.157 against about 0.182); on plain accuracy it trails by about 3 of 406 wards (90.1% against 90.9%).
 - **O8. Closed (L041).** Polls are not used as inputs; their Western Cape record in 2024 shows a consistent under-estimate of the DA that one data point per pollster cannot correct. They are published as a cross-check (Polls page, check C19).
@@ -16,6 +18,43 @@ A running engineering record: decisions with their reasons, errors found (includ
 - **O5. Resolved for the Patriotic Alliance (L023).** The National Coloured Congress, the People's Movement for Change and the ATM have too little by-election evidence and keep the prior; their intervals are correspondingly wide.
 
 ## 2026-09-26
+
+**L047. The decomposition's answer: the simulation step is the DA's largest single step down. A pre-registered test of noise centring, with a closure test.** Levels stay private until the publication decision (L029); the directions and rough sizes are recorded here.
+
+*What the decomposition (L046) found*, Western Cape and Cape Town:
+
+- **Closure (step 1):** moving the 2024 vote onto the 2026 districts and registration changes no party by more than 0.05 points. The geography and registration are sound.
+- **Turnout (step 2):** the 2021 district turnout pattern *raises* the DA by about a point (about two in Cape Town) and lowers the ANC and the EFF by half a point to a point and a half. Mechanism (a) is real for the ANC, but modest.
+- **Translation (step 3):** the ANC's largest single step down (its learned local premium, halved). Parties that stand only locally take about a point and a half between them.
+- **Parties without a fitted translation (step 4):** the PA gains about three points, mostly from the DA.
+- **Newcomers (step 5):** about three and a half points, taken proportionally.
+- **The simulation step (step 6)** is the DA's largest single step down: several points, in the province and in Cape Town. The ANC loses about a point, and every smaller party gains. This is mechanism (e), convexity, and it is larger than the toy calculation in L046 suggested.
+
+*Why the simulation step is so large.* The ward and district spreads are estimated as unweighted standard deviations of all residuals. Those are dominated by small parties, whose log shares are noisy, because few votes and zero counts smoothed to a tiny share swing wildly on the log scale. The same spread is then applied to every party. For a party on 85% of a district, that is far more log-scale noise than it shows, and through the softmax it lowers that party's expected share.
+
+*Why not simply remove it.* In the 2021 backtest the same machinery predicted the DA's provincial share almost exactly (54.7% against 54.7%). The convexity effect may therefore be offsetting something else, for example a translation that overstates a dominant party before the noise. Removing one half of a compensating pair could break a calibrated whole. Hence a test, not a fix.
+
+**Pre-registered test, fixed now.** Two variants, every other setting as in `config.yml`, newcomers included, same random numbers, 2021 backtest:
+
+- **"none"** (current): ward and district noise centred on each party's log share.
+- **"mean"**: the same noise, re-centred in each district so its expected shares equal the baseline shares, the analogue of a retransformation-bias correction. Province and council shocks are unchanged, and newcomers' noise is already mean-preserving.
+
+A **closure test** asks whether each fitted translation, 2014 national to 2016 local and 2019 national to 2021 local, reproduces the election it was fitted on. It predicts in-sample, at full strength, among the parties the translation was fitted for, with districts weighted by their actual votes. The noisy prediction corresponds to "none"; the deterministic prediction corresponds to "mean", which leaves each district's expected share unchanged. The measure is the mean absolute error over the two largest parties' provincial shares, averaged over the two cycles.
+
+**Rule:** "mean" is adopted if it passes all three guards:
+- 90% coverage in [0.80, 0.97];
+- ward Brier no more than 0.005 worse;
+- council-control Brier no more than 0.02 worse (the L045 lesson: control is now a guard; 0.02 is about half of what the premium change cost);
+
+and either:
+- (a) the 90% bootstrap interval of its seat-CRPS difference lies wholly below zero, or
+- (b) that interval includes zero and it has the smaller closure error.
+
+If the interval lies wholly above zero, or a guard fails, nothing changes. A tie on seats defers to the closure test rather than to the point estimate (the L046 lesson). The rule is applied in code (`noise_decision.csv`, column `adopt`).
+
+*What the test cannot settle:* the size of the spread itself (O12). Mean-preserving noise removes the bias in expectation, but keeps a dominant party's intervals as wide as a small party's.
+
+*Also found:* the backtest's headline run still excludes newcomers (O11).
 
 **L046. Newcomer v2 adopted at the new settings; the premium change is within noise; a decomposition to find what holds the ANC down.**
 

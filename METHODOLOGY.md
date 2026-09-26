@@ -51,7 +51,9 @@ Each of 2 000 draws adds shocks on the log-share scale at four levels:
 | Ward, per party | estimated | between-ward residual spread of the step 2 fit |
 | VD, per party | estimated | within-ward residual spread of the step 2 fit |
 
-Shares are renormalised with a softmax. The ward ballot uses the same shares as the PR ballot. (Carrying each party's 2021 ward/PR ratio made no measurable difference in the ward experiment, L040, and is switched off.) parties with no ward candidate in a ward get zero there (A07 until candidate lists are parsed). Turnout per VD starts from its 2021 value and receives province, municipality and VD shocks on the logit scale. Registered voters come from the 2026 VD layer, which is a 2024 snapshot (A06).
+Shares are renormalised with a softmax. **Known bias under test (L047, A21).** The ward and VD spreads are estimated from all parties' residuals, which small parties' noisy log shares dominate, and the same spread is applied to every party. Through the softmax, symmetric noise on the log scale lowers a dominant party's expected share: the share decomposition on the Polls page shows this as the largest single step down for the DA. A pre-registered backtest decides whether the noise should instead be re-centred so each district's expected shares equal its baseline shares.
+
+The ward ballot uses the same shares as the PR ballot. (Carrying each party's 2021 ward/PR ratio made no measurable difference in the ward experiment, L040, and is switched off.) parties with no ward candidate in a ward get zero there (A07 until candidate lists are parsed). Turnout per VD starts from its 2021 value and receives province, municipality and VD shocks on the logit scale. Registered voters come from the 2026 VD layer, which is a 2024 snapshot (A06).
 
 Ward winners are the plurality on the ward ballot. Combined votes go through Schedule 1. Coalition arithmetic then enumerates every subset of the ten largest parties and records which are winning, and which are minimal winning (drop the smallest member and it loses).
 

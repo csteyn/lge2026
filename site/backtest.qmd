@@ -153,6 +153,37 @@ if (file.exists(pub("backtest_premium_grid.csv"))) {
 }
 ```
 
+## Noise centring: a pre-registered experiment
+
+The simulation adds ward and voting-district noise to every party with one spread, on the log scale. Through the conversion to shares, that noise lowers a dominant party's *average* share even though each party's noise is centred on zero: a party on 85% of a district loses share on average. Whether that is a bias depends on what the fitted translation predicts. Two tests decide, with the rule fixed in the [model log](log.qmd) (L047) before the result: the 2021 backtest with and without mean-preserving noise, and a closure test asking whether each fitted translation reproduces the local election it was fitted on.
+
+```{r}
+#| results: asis
+if (file.exists(pub("noise_decision.csv"))) {
+  nd <- rd("noise_decision.csv")
+  cat(sprintf("**Result:** %s. Seat CRPS difference (%s minus %s) %+.4f, 90%% interval %+.4f to %+.4f. Closure error: %s %.1f points, %s %.1f points.\n\n",
+              nd$verdict, nd$alternative, nd$current, nd$crps_diff, nd$crps_diff_lo, nd$crps_diff_hi,
+              nd$current, 100 * nd$closure_mae_current, nd$alternative, 100 * nd$closure_mae_alternative))
+}
+if (file.exists(pub("backtest_noise_grid.csv"))) {
+  rd("backtest_noise_grid.csv") |>
+    transmute(`Noise` = if_else(noise_centring == "mean", "mean-preserving", "centred on log share"),
+              `Seat CRPS` = round(seat_crps, 4), `90% coverage` = pct(pit_cov90), `Ward Brier` = round(ward_brier, 4),
+              `Control Brier` = round(control_brier, 3),
+              `DA 2021: predicted / actual` = pa(da_pred, da_actual),
+              `ANC 2021: predicted / actual` = pa(anc_pred, anc_actual),
+              Current = if_else(current, "yes", "")) |>
+    knitr::kable() |> print()
+}
+if (file.exists(pub("closure.csv"))) {
+  cat("\n*Closure test: each translation predicting the local election it was fitted on (Western Cape, the parties it was fitted for).*\n\n")
+  rd("closure.csv") |> filter(scope == "Western Cape") |> group_by(cycle) |> slice_max(actual, n = 4) |> ungroup() |>
+    transmute(Cycle = cycle, Party = party, Actual = pct(actual, 1), `Deterministic (mean-preserving)` = pct(deterministic, 1),
+              `With noise (current)` = pct(noisy, 1)) |>
+    knitr::kable() |> print()
+}
+```
+
 ## What the model could not see
 
 ```{r}

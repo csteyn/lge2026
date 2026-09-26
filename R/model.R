@@ -134,7 +134,7 @@ fit_transfer <- function(npe_prev, lge_prev, groups, cfg, npe_next = NULL, frac 
     filter(ballot == "PR") |>
     anti_join(local, by = c("muni_code", "party")) |>
     group_shares(g) |>
-    select(muni_code, vd, group, clr_lge = clr, total_lge = total)
+    select(muni_code, vd, group, clr_lge = clr, total_lge = total, share_lge = share)
   wards <- lge_prev |> distinct(muni_code, vd, ward_id)
   # A group must have real votes in BOTH elections in a municipality to inform
   # the fit there; otherwise we would be regressing smoothing noise on
@@ -197,7 +197,8 @@ fit_transfer <- function(npe_prev, lge_prev, groups, cfg, npe_next = NULL, frac 
     coefs = select(coefs, group, n_vd, a, b, default_used, lambda, a_corr, b_corr, a_one),
     sd_ward = sd_ward,
     sd_vd = sd_vd,
-    n_pairs = nrow(xy)
+    n_pairs = nrow(xy),
+    xy = select(xy, muni_code, vd, group, clr_npe, clr_lge, total_lge, share_lge) # for the closure test (L047)
   )
 }
 
@@ -359,6 +360,33 @@ softmax_rows <- function(eta) {
   z / rowSums(z)
 }
 
+#' Offsets that make the local (ward + VD) noise mean-preserving (L047).
+#'
+#' The simulation adds noise with ONE spread for every party on the log scale.
+#' Because shares are a softmax of log-scale values (convex), that noise raises
+#' small parties' expected shares and lowers a dominant party's, even though
+#' every party's noise is centred on zero: a party on 85% of a district loses
+#' share on average. The offsets solve E[softmax(E + delta + e)] = softmax(E)
+#' row by row, by fixed-point iteration over K fixed noise draws, so the
+#' baseline share becomes the expected share instead of the median of the
+#' log share. Used only when config model.noise_centring is "mean".
+mean_preserving_offsets <- function(E, sd_local, K = 400, iter = 8, seed = 1) {
+  target <- softmax_rows(E)
+  delta <- matrix(0, nrow(E), ncol(E))
+  if (!is.finite(sd_local) || sd_local <= 0) return(delta)
+  for (it in seq_len(iter)) {
+    m <- matrix(0, nrow(E), ncol(E))
+    for (k in seq_len(K)) {
+      e <- withr::with_seed(seed + k, matrix(rnorm(length(E), 0, sd_local), nrow(E)))
+      m <- m + softmax_rows(E + delta + e)
+    }
+    m <- m / K
+    delta <- delta + log(pmax(target, 1e-300)) - log(pmax(m, 1e-300))
+    delta <- delta - rowMeans(delta) # softmax ignores a constant per row
+  }
+  delta
+}
+
 #' Province-wide shocks shared by every municipality within a draw
 # Local premium for parties without a fitted transfer (MODEL-LOG L022) --------
 #
@@ -439,6 +467,10 @@ simulate_municipality <- function(base_m, council, prov, other_w, swing_priors, 
     arrange(vd) |> select(all_of(groups)) |> as.matrix()
   C[is.na(C)] <- FALSE
   ratio <- wide |> distinct(group, log_ward_ratio) |> arrange(match(group, groups)) |> pull(log_ward_ratio)
+  # L047: optionally re-centre the local noise so each VD's expected shares
+  # equal its baseline shares (config model.noise_centring: none | mean)
+  if (identical(cfg$model$noise_centring, "mean"))
+    E <- E + mean_preserving_offsets(E, sqrt(sd_ward^2 + sd_vd^2), seed = cfg$model$seed + 7L)
 
   # Newcomers (L035). They have no baseline, so they are inserted AFTER the
   # established parties' shares have been computed with all their shocks:
