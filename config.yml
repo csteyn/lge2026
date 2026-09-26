@@ -19,7 +19,8 @@ model:
   # Only by-elections after the 2024 national election: earlier ones predate
   # the 2024 baseline, and the placebo parties show a systematic drift there.
   byelection_since: "2024-05-29"
-  # Newcomer module (L035). Off until the pre-registered backtest adopts it.
+  # Newcomer module: model v2 (L044), adopted by the pre-registered backtest
+  # at the adopted premium basis (L046); check C20 guards its totals.
   entrants: true
   entrant_min_cell: 8         # v1 only; unused since the v2 model (L044)
   byelection_min_wards: 3

@@ -150,6 +150,9 @@ list(
   tar_target(polls, read_polls(polls_file)),
   tar_target(province_share, province_vote_share(sims, baseline)),
   tar_target(poll_comparison, compare_polls(polls, province_share, summaries$vote_share)),
+  # from the 2024 result to the forecast, step by step: a diagnostic (L046, O10)
+  tar_target(share_decomposition, decompose_shares(scoped$npe2024, groups, baseline, premium, swing,
+                                                   entrant_draws, province_share, summaries$vote_share)),
 
   # --- checks and publication ------------------------------------------------------
   tar_target(checks, run_checks(scoped, groups, transfer, baseline, summaries, cfg, seat_validation,
@@ -160,7 +163,7 @@ list(
   tar_target(public, {
     assumptions_file
     write_public_outputs(summaries, checks, scoped, cfg, transfer, seat_validation, party_status, premium,
-                         premium_estimate, entrant_table, province_share, poll_comparison)
+                         premium_estimate, entrant_table, province_share, poll_comparison, share_decomposition)
   }, format = "file"),
   # --- backtest: predict 2021 blind, score it, estimate the A02 spreads (L026)
   tar_target(backtest, run_backtest(backtest_inputs, cfg, backtest_entrant_prior), error = "continue"),

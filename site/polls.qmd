@@ -34,3 +34,29 @@ if (file.exists(pub("poll_comparison.csv"))) rd("poll_comparison.csv") |>
             Gap = sprintf("%+.0f points", 100 * difference)) |>
   knitr::kable(escape = FALSE)
 ```
+
+## From the 2024 result to the forecast
+
+Where does the forecast part company with the last result, and why? This table starts from the 2024 provincial-ballot result and adds the model's ingredients one at a time. It is a diagnostic: nothing in it feeds back into the forecast ([model log](log.qmd) L046). Step 1 only moves the 2024 vote onto the 2026 voting districts and should change almost nothing. The newcomer step uses each newcomer's median share, and the last column is the simulation's median, which is not a sum of the steps: medians of skewed distributions do not add up to 100%, and random variation on the log scale pulls large parties' shares down.
+
+```{r}
+#| results: asis
+if (file.exists(pub("share_decomposition.csv"))) {
+  dc <- rd("share_decomposition.csv")
+  steps <- dc |> distinct(step_no, step) |> arrange(step_no)
+  for (sc in intersect(c("Western Cape", "CPT"), unique(dc$scope))) {
+    x <- filter(dc, scope == sc)
+    top <- x |> filter(step_no == max(step_no), !newcomer, party != "OTHER") |> slice_max(share, n = 5) |> pull(party)
+    rows <- x |> mutate(row = case_when(party %in% top ~ party, newcomer ~ "Newcomers (all)", TRUE ~ "Everyone else")) |>
+      summarise(share = sum(share), .by = c(row, step_no)) |>
+      mutate(row = factor(row, levels = c(top, "Newcomers (all)", "Everyone else"))) |> arrange(row, step_no) |>
+      mutate(share = pct(share, 1)) |>
+      tidyr::pivot_wider(names_from = step_no, values_from = share)
+    names(rows) <- c("Party", sprintf("%d. %s", steps$step_no, steps$step))
+    cat(sprintf("\n**%s**\n\n", if (sc == "CPT") "Cape Town" else sc))
+    print(knitr::kable(rows))
+    cat("\n")
+  }
+}
+```
+

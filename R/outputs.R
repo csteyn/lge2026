@@ -5,7 +5,8 @@
 
 write_public_outputs <- function(summaries, checks, inputs, cfg, transfer, seat_validation = NULL,
                                  party_status = NULL, premium = NULL, premium_estimate = NULL,
-                                 entrant_table = NULL, province_share = NULL, poll_comparison = NULL) {
+                                 entrant_table = NULL, province_share = NULL, poll_comparison = NULL,
+                                 share_decomposition = NULL) {
   dir.create(path_public(), showWarnings = FALSE, recursive = TRUE)
   id <- run_id()
   meta <- tibble(
@@ -32,6 +33,7 @@ write_public_outputs <- function(summaries, checks, inputs, cfg, transfer, seat_
   if (!is.null(entrant_table) && nrow(entrant_table)) tables$newcomers <- entrant_table
   if (!is.null(province_share)) tables$province_share <- province_share
   if (!is.null(poll_comparison) && nrow(poll_comparison)) tables$poll_comparison <- poll_comparison
+  if (!is.null(share_decomposition) && nrow(share_decomposition)) tables$share_decomposition <- share_decomposition
   tables$polls_track_record <- read_csv("data-raw/manual/polls_track_record.csv", comment = "#", show_col_types = FALSE)
   if (!is.null(premium_estimate) && nrow(premium_estimate$ward_residuals)) {
     tables$byelection_residuals <- premium_estimate$ward_residuals
