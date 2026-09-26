@@ -183,6 +183,13 @@ list(
   }, error = "continue"),
   tar_target(noise_verdict, noise_decision(noise_grid, closure, cfg), error = "continue"),
   tar_target(noise_public, write_noise_outputs(noise_grid, closure, noise_verdict), format = "file", error = "continue"),
+  # L048: the forecast under the other noise centring, published as a sensitivity
+  tar_target(noise_sensitivity_tbl, noise_sensitivity(
+    baseline, scoped$councils, swing, premium, other_w, transfer, cfg,
+    entrants_all, entrant_prior, entrant_overrides, scoped$contests,
+    summaries$control, summaries$vote_share, province_share,
+    n_draws = max(500L, as.integer(cfg$model$n_draws %/% 2))), error = "continue"),
+  tar_target(sensitivity_public, write_sensitivity_output(noise_sensitivity_tbl), format = "file", error = "continue"),
 
   tar_target(site_pages, {
     public; errata_file

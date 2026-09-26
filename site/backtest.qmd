@@ -184,6 +184,27 @@ if (file.exists(pub("closure.csv"))) {
 }
 ```
 
+### What the kept choice means for 2026
+
+The test kept the current noise. The closure test nonetheless shows it pulls a dominant party's share down in-sample, by several points in Cape Town, while its out-of-sample advantage in 2021 came from offsetting errors (MODEL-LOG L048). This table re-runs the 2026 forecast with mean-preserving noise. It is a sensitivity, not a forecast: the gap between the two columns is a measure of how much the headline rests on this unresolved choice.
+
+```{r}
+#| results: asis
+if (file.exists(pub("noise_sensitivity.csv"))) {
+  ns <- rd("noise_sensitivity.csv")
+  vs <- ns |> filter(measure == "PR vote share (median)", muni_code %in% c("Western Cape", "CPT")) |>
+    group_by(muni_code) |> slice_max(forecast, n = 5) |> ungroup() |>
+    transmute(Area = if_else(muni_code == "CPT", "Cape Town", muni_code), Party = outcome,
+              Forecast = pct(forecast, 1), `Mean-preserving noise` = pct(alternative, 1),
+              Difference = sprintf("%+.1f points", 100 * (alternative - forecast)))
+  print(knitr::kable(vs))
+  ctl <- ns |> filter(measure == "control probability") |>
+    filter(abs(alternative - forecast) >= 0.10) |> arrange(desc(abs(alternative - forecast))) |>
+    transmute(Council = muni_code, Outcome = outcome, Forecast = pct(forecast), `Mean-preserving noise` = pct(alternative))
+  if (nrow(ctl)) { cat("\n*Control outcomes whose probability moves by 10 points or more:*\n\n"); print(knitr::kable(ctl)) }
+}
+```
+
 ## What the model could not see
 
 ```{r}

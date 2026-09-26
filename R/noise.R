@@ -138,3 +138,46 @@ write_noise_outputs <- function(grid, closure, decision) {
   write_csv(decision, files[["noise_decision"]])
   unname(files)
 }
+
+#' The 2026 forecast re-run with the other noise centring (L048). A published
+#' SENSITIVITY, not a forecast: it shows how far the headline numbers depend
+#' on the choice the L047 test kept (A21), which the closure test shows biases
+#' a dominant party's share down in-sample.
+noise_sensitivity <- function(baseline, councils, swing, premium, other_w, transfer, cfg,
+                              entrants = NULL, entrant_prior = NULL, entrant_overrides = NULL, contests = NULL,
+                              main_control, main_vote_share, main_province, n_draws = 1000,
+                              province_label = "Western Cape") {
+  c2 <- cfg
+  c2$model$n_draws <- n_draws
+  c2$model$noise_centring <- setdiff(c("none", "mean"), cfg$model$noise_centring %||% "none")
+  prov <- draw_province_effects(sort(unique(baseline$group)), swing, c2, premium)
+  ed <- if (isTRUE(cfg$model$entrants) && !is.null(entrants) && nrow(entrants))
+    draw_entrant_shares(entrants, entrant_prior, n_draws, cfg$model$seed + 7, entrant_overrides) else list()
+  sims <- map(split(baseline, baseline$muni_code), \(b) simulate_municipality(
+    b, filter(councils, muni_code == b$muni_code[1]), prov, other_w, swing, transfer, c2,
+    entrant_shares = ed[[b$muni_code[1]]], entrant_contests = contests))
+  alt_control <- map_dfr(sims, \(s) mutate(control_outcomes(s$seats, s$total_seats), muni_code = s$muni_code, .before = 1))
+  alt_share <- map_dfr(sims, \(s) tibble(muni_code = s$muni_code, outcome = s$groups,
+                                         alternative = apply(s$pr_share, 2, median)))
+  alt_prov <- province_vote_share(sims, baseline)
+  bind_rows(
+    full_join(select(main_control, muni_code, outcome, forecast = prob),
+              select(alt_control, muni_code, outcome, alternative = prob), by = c("muni_code", "outcome")) |>
+      mutate(measure = "control probability"),
+    full_join(select(main_vote_share, muni_code, outcome = party, forecast = pr_share_median),
+              alt_share, by = c("muni_code", "outcome")) |>
+      mutate(measure = "PR vote share (median)"),
+    full_join(transmute(main_province, muni_code = province_label, outcome = party, forecast = median),
+              transmute(alt_prov, muni_code = province_label, outcome = party, alternative = median),
+              by = c("muni_code", "outcome")) |>
+      mutate(measure = "PR vote share (median)")
+  ) |>
+    mutate(across(c(forecast, alternative), \(x) coalesce(x, 0)),
+           alternative_centring = c2$model$noise_centring, n_draws_alternative = n_draws) |>
+    relocate(measure, muni_code, outcome)
+}
+
+write_sensitivity_output <- function(x) {
+  dir.create(path_public(), showWarnings = FALSE, recursive = TRUE)
+  f <- path_public("noise_sensitivity.csv"); write_csv(x, f); f
+}

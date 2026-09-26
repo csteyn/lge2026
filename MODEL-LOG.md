@@ -4,8 +4,9 @@ A running engineering record: decisions with their reasons, errors found (includ
 
 ## Open obstacles
 
-- **O12. Heteroscedastic spreads.** One ward spread and one district spread serve every party, estimated from residuals dominated by small parties' sampling noise. Even if L047 removes the bias this causes in expectation, a dominant party's intervals stay too wide. A spread net of sampling noise, or by share level, would need its own pre-registered test.
-- **O11. The backtest's headline run excludes newcomers**, though they are now in the forecast (L046). The L047 experiment runs with them. The headline is aligned after L047 is decided, so the reference numbers do not move mid-experiment.
+- **O13. The translation does not reproduce its own election's totals (L048).** Predicting each fitted local election in-sample, without noise, it overstates the DA's provincial share by about 2 points and understates the ANC's by 1 to 2, in both cycles. Cape Town is reproduced almost exactly. The cause is probably the weighting: a premium averaged over districts is not the premium of the totals. Calibrating it to reproduce totals is the obvious fix, and it would need its own pre-registered test.
+- **O12. Heteroscedastic spreads; now the main unresolved bias (L048).** One ward spread and one district spread serve every party, estimated from residuals dominated by small parties' sampling noise. In-sample this lowers the dominant party's share (by 2.4 to 5.6 points in Cape Town against the actual result) and inflates small parties' shares by roughly 40%. Mean-preserving noise failed its test (L048), because the 2021 backtest's favourable DA result came from offsetting errors. A fix must address O12 and O13 together, and cannot be judged on the 2021 backtest alone.
+- **O11. Resolved (L048).** The backtest's headline run now includes newcomers when they are on.
 - **O10. The ANC's position (L046-L047).** The decomposition finds no single mechanical cause: its fall from the 2024 result is spread across turnout, its learned local premium (the largest step), the PA, newcomers and the simulation step. The one available test, 2021, over-predicted the ANC by about four points, so on the evidence the model is more likely to over- than under-state it in a local election. The gap with Ipsos may be a real disagreement between the model and the poll. Open until L047 is decided, since that test moves the ANC too.
 - **O9. Resolved (L046).** Newcomer model v2 passed its pre-registered test at the adopted settings and is in use.
 - **O7. Largely resolved (L040).** On ward Brier score the model now beats the national-vote rule (0.157 against about 0.182); on plain accuracy it trails by about 3 of 406 wards (90.1% against 90.9%).
@@ -18,6 +19,35 @@ A running engineering record: decisions with their reasons, errors found (includ
 - **O5. Resolved for the Patriotic Alliance (L023).** The National Coloured Congress, the People's Movement for Change and the ATM have too little by-election evidence and keep the prior; their intervals are correspondingly wide.
 
 ## 2026-09-26
+
+**L048. Mean-preserving noise is rejected under the L047 rule. The closure test shows the kept noise is biased, and the 2021 backtest favoured it through offsetting errors. The forecast is unchanged; the choice's size is published as a sensitivity.** The rule was committed and pushed before the run (`ae54533`).
+
+*The backtest* (2021, newcomers on, 400 draws, same random numbers):
+
+| | Seat CRPS | 90% coverage | Ward Brier | Control Brier | Councils right | DA 2021 | ANC 2021 |
+|---|---|---|---|---|---|---|---|
+| none (current) | 0.3816 | 88.1% | 0.1513 | 0.236 | 22 of 25 | 53.7% | 24.3% |
+| mean-preserving | 0.4034 | 85.4% | 0.1470 | 0.353 | 18 of 25 | 57.5% | 24.7% |
+
+Actual 2021: DA 54.7%, ANC 20.5%. The seat-CRPS difference is +0.022, with a 90% interval of +0.003 to +0.041, wholly above zero. The control guard fails as well, at +0.117 against an allowance of 0.02. **Under the rule, nothing changes** on two counts; the code reports the first it checks, "a guard fails". Ward Brier was slightly better with mean-preserving noise.
+
+*The closure test* (each translation predicting, in-sample, the election it was fitted on; spreads of 0.78 for the 2014-2016 fit and 0.89 for the 2019-2021 fit):
+
+| | DA actual | without noise | with noise | ANC actual | without noise | with noise |
+|---|---|---|---|---|---|---|
+| 2016, Western Cape | 65.1% | 66.8% | 64.0% | 27.1% | 25.0% | 25.0% |
+| 2016, Cape Town | 67.3% | 67.7% | 64.9% | | | |
+| 2021, Western Cape | 59.9% | 61.9% | 56.7% | 22.3% | 21.3% | 20.9% |
+| 2021, Cape Town | 62.2% | 62.1% | 56.6% | | | |
+
+The mean error over the two largest parties is 1.7 points without noise and 1.9 with. The noise also inflates small parties in-sample by roughly 40%: in 2021 the FF+ came out at 4.5% against 3.2% actual, and the ACDP at 3.1% against 2.0%.
+
+*What this means.* In-sample, the current noise biases the dominant party down against the actual result: by 1.1 to 3.2 points in the province and by 2.4 to 5.6 in Cape Town, where the deterministic translation is almost exact. Out of sample, in 2021, the deterministic translation overstated the DA by about 3 points. That came from the DA's strong 2016 local premium, which did not persist, together with the translation's own in-sample overstatement (O13). The noise's downward bias, about 4 points in that regime, cancelled it. **The current model won the backtest through offsetting errors.** In 2026 the noise is larger (spread 0.89 against 0.78) and so is its effect on the DA (L047). The DA's learned premium carried into 2026 is small, so there is less for the noise to offset. The Cape Town DA figure is therefore the forecast's least secure number, and more likely too low than too high. That is a judgement from the evidence above, not a tested estimate. The rule stands regardless: changing the model on this reasoning, after seeing the result, is what pre-registration exists to prevent.
+
+*What is done instead.*
+- (1) **A published sensitivity.** The 2026 forecast is re-run with mean-preserving noise at half the draws, as `noise_sensitivity.csv` on the Backtest page. The headline stays the rule's choice, and readers can see how much it depends on this.
+- (2) **O12 and O13 are the route to a real fix.** Spreads that reflect how much each party actually varies, together with a translation calibrated to reproduce its own totals, would remove both halves of the offsetting pair. Its test cannot rest on the 2021 backtest alone, since that is the election whose offsetting errors produced this result. The closure test must be part of the rule.
+- (3) **O11 is resolved.** The backtest headline now includes newcomers when they are on. The newcomer test keeps its own chain without them. The published backtest summary will change accordingly; no decision depended on it.
 
 **L047. The decomposition's answer: the simulation step is the DA's largest single step down. A pre-registered test of noise centring, with a closure test.** Levels stay private until the publication decision (L029); the directions and rough sizes are recorded here.
 

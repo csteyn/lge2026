@@ -453,11 +453,15 @@ backtest_premium_grid <- function(bt, cfg, n_draws = 400) {
 
 run_backtest <- function(bt, cfg, entrant_prior = NULL) {
   n <- cfg$backtest$n_draws %||% 1000
-  chain_cfg <- run_chain(bt$inputs, cfg, n)
+  # The headline is the model as configured, newcomers included when they are
+  # on (O11, resolved in L048); the newcomer test keeps its own chain without.
+  ep <- if (isTRUE(cfg$model$entrants)) entrant_prior else NULL
+  prep_cfg <- prepare_chain(bt$inputs, cfg, "fitted", entrant_prior = ep)
+  chain_cfg <- simulate_chain(prep_cfg, cfg, n)
   sc_cfg <- score_chain(chain_cfg, bt$truth)
   sds <- estimate_shock_sds(chain_cfg, bt$truth)
-  chain_est <- run_chain(bt$inputs, cfg, n,
-                         sd_override = list(province_party = sds$province, muni_party = sds$muni))
+  chain_est <- simulate_chain(prep_cfg, cfg, n,
+                              sd_override = list(province_party = sds$province, muni_party = sds$muni))
   sc_est <- score_chain(chain_est, bt$truth)
   np <- naive_rule(bt$inputs, bt$truth, "previous_local"); nn <- naive_rule(bt$inputs, bt$truth, "national_as_is")
   naive <- bind_rows(np, nn)
@@ -469,7 +473,8 @@ run_backtest <- function(bt, cfg, entrant_prior = NULL) {
   ) |> transmute(rule, seat_mae = seat_mae_median, control_correct = control_modal_correct,
                  ward_correct = ward_modal_correct)
   grid <- backtest_grid(bt, cfg, n_draws = cfg$backtest$grid_draws %||% 400)
-  newcomers <- backtest_entrants(bt, cfg, entrant_prior, n, sc_cfg)
+  sc_without <- if (is.null(ep)) sc_cfg else score_chain(run_chain(bt$inputs, cfg, n), bt$truth)
+  newcomers <- backtest_entrants(bt, cfg, entrant_prior, n, sc_without)
   ward_grid <- backtest_ward_grid(bt, cfg, entrant_prior, n_draws = cfg$backtest$grid_draws %||% 400)
   premium_grid <- backtest_premium_grid(bt, cfg, n_draws = cfg$backtest$grid_draws %||% 400)
   list(
