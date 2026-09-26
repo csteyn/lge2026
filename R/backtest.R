@@ -112,7 +112,7 @@ prepare_chain <- function(inp, cfg, intercepts = c("fitted", "zero"), entrant_pr
   interp <- premium_basis == "interpolated"
   tr <- apply_transfer_variant(fit_transfer(inp$npe_prev, inp$lge_prev, groups, cfg,
                                             npe_next = if (interp) inp$npe_latest, frac = if (interp) inp$interp_frac %||% 0.5),
-                               b_mode, shrink)
+                               b_mode, shrink, calibrate = identical(cfg$model$premium_calibration, "totals"))
   if (intercepts == "zero") tr$coefs$a <- 0
   cg <- if (is.null(inp$contests)) NULL else inp$contests |>
     inner_join(select(groups, muni_code, party, group), by = c("muni_code", "party")) |>

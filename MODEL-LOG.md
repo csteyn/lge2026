@@ -4,8 +4,8 @@ A running engineering record: decisions with their reasons, errors found (includ
 
 ## Open obstacles
 
-- **O13. The translation does not reproduce its own election's totals (L048).** Predicting each fitted local election in-sample, without noise, it overstates the DA's provincial share by about 2 points and understates the ANC's by 1 to 2, in both cycles. Cape Town is reproduced almost exactly. The cause is probably the weighting: a premium averaged over districts is not the premium of the totals. Calibrating it to reproduce totals is the obvious fix, and it would need its own pre-registered test.
-- **O12. Heteroscedastic spreads; now the main unresolved bias (L048).** One ward spread and one district spread serve every party, estimated from residuals dominated by small parties' sampling noise. In-sample this lowers the dominant party's share (by 2.4 to 5.6 points in Cape Town against the actual result) and inflates small parties' shares by roughly 40%. Mean-preserving noise failed its test (L048), because the 2021 backtest's favourable DA result came from offsetting errors. A fix must address O12 and O13 together, and cannot be judged on the 2021 backtest alone.
+- **O13. The translation does not reproduce its own election's totals.** Under test in L049 (intercepts calibrated to totals).
+- **O12. Heteroscedastic spreads.** Under test in L049 (one spread per party, net of sampling noise).
 - **O11. Resolved (L048).** The backtest's headline run now includes newcomers when they are on.
 - **O10. The ANC's position (L046-L047).** The decomposition finds no single mechanical cause: its fall from the 2024 result is spread across turnout, its learned local premium (the largest step), the PA, newcomers and the simulation step. The one available test, 2021, over-predicted the ANC by about four points, so on the evidence the model is more likely to over- than under-state it in a local election. The gap with Ipsos may be a real disagreement between the model and the poll. Open until L047 is decided, since that test moves the ANC too.
 - **O9. Resolved (L046).** Newcomer model v2 passed its pre-registered test at the adopted settings and is in use.
@@ -19,6 +19,42 @@ A running engineering record: decisions with their reasons, errors found (includ
 - **O5. Resolved for the Patriotic Alliance (L023).** The National Coloured Congress, the People's Movement for Change and the ATM have too little by-election evidence and keep the prior; their intervals are correspondingly wide.
 
 ## 2026-09-26
+
+**L049. The L048 run checked; O12 and O13 built and pre-registered as one experiment with a closure test per variant.** Nothing in this entry was written after a result from the new code had been read.
+
+*The L048 run, checked.*
+- **The backtest headline now includes newcomers**, and its seat score equals the newcomer test's "with newcomers" row exactly (0.3790), as it should.
+- **Against the two simple rules:** the model's seat error is 0.47 against 0.65 (national vote as-is) and 0.77 (repeat 2021). Council control is right in 84% of councils against 56% and 48%. On ward winners it trails national-vote-as-is slightly: 90.4% against 90.9%.
+- **The noise sensitivity is large.** Under mean-preserving noise, the DA's median vote gains about 5 points, in the province and in Cape Town. Seven councils' control probabilities move by 15 points or more, Cape Town's majority probability by 35. The unresolved choice is the largest single uncertainty in the forecast. (Levels private until the publication decision, L029.)
+
+*What is built.*
+- **O13, calibrated intercepts** (`premium_calibration: totals`). Each fitted party's intercept is adjusted, slope fixed, until the in-sample prediction without noise reproduces every party's total votes in the fitted election. This is iterative proportional fitting on the intercepts, before halving, anchored to the fitted intercepts' mean. On the demo it is exact to 10^-6, where the fitted means miss by 0.3 points.
+- **O12, party-specific spreads** (`spreads: party`). Each party's local spread is its own residual variance, weighted by its votes, net of the expected sampling variance of the two log shares, (1 - s)/(n s). Where sampling noise exceeds half the raw variance, or a party has too few districts, the estimate is unreliable (it can collapse to zero), and the median of the reliable parties is used. The ward/district split follows the pooled ratio. Newcomers keep the pooled spreads. **Validation on synthetic data** generated with one structural spread of 0.15: the pooled estimate is 0.31, while the party-specific estimates are 0.17 for every party with reliable data. The pooled method doubles the spread, which is the O12 mechanism shown where the truth is known.
+
+**Pre-registered experiment, fixed now.** Five variants, every other setting as in `config.yml`, newcomers included, same random numbers, 2021 backtest at 400 draws:
+
+| | Intercepts | Spreads | Noise centred on |
+|---|---|---|---|
+| **A** (current) | as fitted | pooled | log share |
+| **B** | calibrated | pooled | log share |
+| **C** | calibrated | pooled | expected share (mean-preserving) |
+| **D** | calibrated | per party | log share |
+| **E** | calibrated | per party | expected share |
+
+**Closure test for every variant.** Each cycle's translation (2014 national to 2016 local, 2019 national to 2021 local) predicts, in-sample and at full strength, the election it was fitted on, with the variant's own intercepts and noise. Mean-preserving noise leaves each district's expected share unchanged, so its closure is the prediction without noise. The error is the mean absolute error over the two largest parties' shares, for the province and for Cape Town, averaged over scopes and cycles. Calibration makes the provincial error without noise zero by construction, so the Cape Town half and the noise carry the information.
+
+**Rule.** A variant qualifies if all five hold:
+1. closure error at most **1.0 point**;
+2. 90% coverage in [0.80, 0.97];
+3. ward Brier no more than 0.005 worse than the current model's;
+4. council-control Brier no more than 0.02 worse;
+5. seat CRPS **not demonstrably worse**: the 90% bootstrap interval of its difference from the current model does not lie wholly above zero.
+
+Among qualifying variants, the lowest seat CRPS is adopted; if none qualifies, nothing changes. The rule is applied in code (`calibration_decision.csv`, column `adopt`), and the adopted row carries the three settings to copy into `config.yml`.
+
+*Why criterion 5 is not "better on seats".* L048 showed that the current model's 2021 advantage came from two errors offsetting. A variant that reproduces its own elections, and is not demonstrably worse out of sample, is preferred to one that wins the single out-of-sample test by cancellation. A variant demonstrably worse on seats still cannot be adopted. This is a value judgement, made now and stated as such. The current model fails criterion 1 (about 2 points, L048); it stays only as the fallback.
+
+*Relation to L047.* The rejection of mean-preserving noise stands for the model it tested. Variants C and E differ from it, because their intercepts are calibrated, so testing them is not a retrial of L047.
 
 **L048. Mean-preserving noise is rejected under the L047 rule. The closure test shows the kept noise is biased, and the 2021 backtest favoured it through offsetting errors. The forecast is unchanged; the choice's size is published as a sensitivity.** The rule was committed and pushed before the run (`ae54533`).
 

@@ -205,6 +205,26 @@ if (file.exists(pub("noise_sensitivity.csv"))) {
 }
 ```
 
+## Calibration and spreads: a pre-registered experiment
+
+The noise experiment above exposed two defects that offset each other in 2021 ([model log](log.qmd) L048). Predicting its own election, the translation overstated the DA and understated the ANC (O13). One pooled noise spread, dominated by small parties' sampling noise, pulled the DA down (O12). Five variants fix these singly and together. Each is scored on the 2021 backtest and on whether it reproduces the elections it was fitted on. The rule was fixed in L049 before any result: a variant must reproduce its own elections to within a point, stay calibrated, lose no more than 0.005 on ward Brier and 0.02 on council control, and not be demonstrably worse on seats. The lowest seat CRPS among qualifying variants is adopted.
+
+```{r}
+if (file.exists(pub("calibration_decision.csv"))) {
+  rd("calibration_decision.csv") |>
+    transmute(Variant = paste(variant, description, sep = ": "), `Seat CRPS` = round(seat_crps, 4),
+              `vs current (90% interval)` = if_else(current, "", sprintf("%+.4f (%+.4f to %+.4f)", crps_diff, crps_diff_lo, crps_diff_hi)),
+              `Closure error` = sprintf("%.1f pts", 100 * closure_mae), `90% coverage` = pct(pit_cov90),
+              `Ward Brier` = round(ward_brier, 4), `Control Brier` = round(control_brier, 3),
+              `DA 2021` = pa(da_pred, da_actual), `ANC 2021` = pa(anc_pred, anc_actual),
+              Result = case_when(adopt ~ "adopted", current ~ "current model", qualifies ~ "qualifies",
+                                 !closure_ok ~ "fails closure", !seats_ok ~ "worse on seats",
+                                 !coverage_ok ~ "fails coverage", !ward_ok ~ "fails ward guard",
+                                 !control_ok ~ "fails control guard", TRUE ~ "")) |>
+    knitr::kable()
+}
+```
+
 ## What the model could not see
 
 ```{r}

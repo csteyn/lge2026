@@ -36,6 +36,12 @@ model:
   # party's log share; "mean" re-centres it so each district's expected shares
   # equal its baseline shares. Chosen by the pre-registered test in L047.
   noise_centring: none
+  # O12/O13 (L049): intercepts as fitted ("none") or calibrated so the fitted
+  # translation reproduces its own election's totals ("totals"); one pooled
+  # local spread ("pooled") or one per party, net of sampling noise ("party").
+  # Chosen by the pre-registered test in L049, with noise_centring above.
+  premium_calibration: none
+  spreads: pooled
   sd:                        # shocks on the log-share scale (A02)
     # Chosen by the pre-registered 2021 backtest (MODEL-LOG L027-L028): lowest
     # seat CRPS among 24 settings with 90% coverage in [0.80, 0.97]. Formerly

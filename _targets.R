@@ -97,7 +97,8 @@ list(
     apply_transfer_variant(
       fit_transfer(scoped$npe2019, scoped$lge2021, groups, cfg, npe_next = if (interp) scoped$npe2024,
                    frac = if (interp) interp_frac(cfg$dates$npe2019, cfg$dates$lge2021, cfg$dates$npe2024)),
-      cfg$model$transfer_b %||% "fitted", cfg$model$premium_shrink %||% 1)
+      cfg$model$transfer_b %||% "fitted", cfg$model$premium_shrink %||% 1,
+      calibrate = identical(cfg$model$premium_calibration, "totals"))            # O13, L049
   }),
   tar_target(contests_g, if (is.null(scoped$contests)) NULL else scoped$contests |>
                inner_join(select(groups, muni_code, party, group), by = c("muni_code", "party")) |>
@@ -190,6 +191,23 @@ list(
     summaries$control, summaries$vote_share, province_share,
     n_draws = max(500L, as.integer(cfg$model$n_draws %/% 2))), error = "continue"),
   tar_target(sensitivity_public, write_sensitivity_output(noise_sensitivity_tbl), format = "file", error = "continue"),
+  # --- L049: O12 + O13, a pre-registered experiment with a closure test per variant
+  tar_target(calibration_grid, backtest_calibration_grid(backtest_inputs, cfg, backtest_entrant_prior,
+                                                         cfg$backtest$grid_draws %||% 400), error = "continue"),
+  tar_target(closure_variants, {
+    interp <- identical(cfg$model$premium_basis, "interpolated")
+    bi <- backtest_inputs$inputs
+    closure_all_variants(list(
+      "2014 national to 2016 local" = fit_transfer(bi$npe_prev, bi$lge_prev,
+        define_party_groups(bi$lge_prev, bi$npe_latest, cfg, bi$pr_lists), cfg,
+        npe_next = if (interp) bi$npe_latest, frac = if (interp) bi$interp_frac),
+      "2019 national to 2021 local" = fit_transfer(scoped$npe2019, scoped$lge2021, groups, cfg,
+        npe_next = if (interp) scoped$npe2024,
+        frac = if (interp) interp_frac(cfg$dates$npe2019, cfg$dates$lge2021, cfg$dates$npe2024))), cfg)
+  }, error = "continue"),
+  tar_target(calibration_verdict, calibration_decision(calibration_grid, closure_variants), error = "continue"),
+  tar_target(calibration_public, write_calibration_outputs(calibration_verdict, closure_variants),
+             format = "file", error = "continue"),
 
   tar_target(site_pages, {
     public; errata_file

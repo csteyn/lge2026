@@ -173,6 +173,32 @@ fit_transfer <- function(npe_prev, lge_prev, groups, cfg, npe_next = NULL, frac 
   sd_ward <- sd(ward_means$e_w, na.rm = TRUE)
   sd_vd <- sd(within$e_vd, na.rm = TRUE)
 
+  # Party-specific local spreads (O12, L049). The pooled spreads above are
+  # unweighted over every party-district cell, so small parties' sampling noise
+  # (few votes, zeros smoothed to tiny shares) dominates them, and the same
+  # spread is then given to a party on 85% of a district. Here each party's
+  # spread is its OWN residual variance, weighted by its votes, net of the
+  # expected sampling variance of the two log shares, (1 - s) / (n s). Where
+  # sampling noise is more than half a party's raw residual variance, or it
+  # has fewer than transfer_min_vds districts, the net figure is unreliable
+  # (it can go to zero for small parties) and the median of the reliable
+  # parties' spreads is used instead. The ward/district split follows the
+  # pooled ratio. Used when config model.spreads is "party". On synthetic data
+  # with one structural spread of 0.15, the pooled estimate is about 0.31 and
+  # the party-specific ones about 0.17 (tests/testthat/test-calibration.R).
+  f_ward <- sd_ward^2 / (sd_ward^2 + sd_vd^2)
+  sd_party <- resid |>
+    mutate(w = total_lge * share_lge,
+           samp = (1 - share_lge) / (total_lge * share_lge) + (1 - share_npe) / (total_npe * share_npe)) |>
+    summarise(n_vd = n(), v_raw = sum(w * (e - sum(w * e) / sum(w))^2) / sum(w),
+              v_samp = sum(w * samp) / sum(w), .by = group) |>
+    mutate(reliable = v_samp <= 0.5 * v_raw & n_vd >= (cfg$model$transfer_min_vds %||% 30),
+           sd_total = if_else(reliable, sqrt(pmax(v_raw - v_samp, 0.05^2)), NA_real_))
+  fallback <- if (any(sd_party$reliable)) median(sd_party$sd_total, na.rm = TRUE) else sqrt(sd_ward^2 + sd_vd^2)
+  sd_party <- sd_party |>
+    mutate(sd_total = coalesce(sd_total, fallback),
+           sd_ward = sqrt(f_ward) * sd_total, sd_vd = sqrt(1 - f_ward) * sd_total)
+
   # Errors-in-variables correction (L039). The 2019 shares are themselves
   # sampled: a share p among n votes has log-scale sampling variance of about
   # (1 - p) / (n p). The fraction of a party's observed spatial variance that
@@ -197,6 +223,7 @@ fit_transfer <- function(npe_prev, lge_prev, groups, cfg, npe_next = NULL, frac 
     coefs = select(coefs, group, n_vd, a, b, default_used, lambda, a_corr, b_corr, a_one),
     sd_ward = sd_ward,
     sd_vd = sd_vd,
+    sd_party = sd_party,
     n_pairs = nrow(xy),
     xy = select(xy, muni_code, vd, group, clr_npe, clr_lge, total_lge, share_lge) # for the closure test (L047)
   )
@@ -207,15 +234,53 @@ fit_transfer <- function(npe_prev, lge_prev, groups, cfg, npe_next = NULL, frac 
 #'          "corrected"  errors-in-variables corrected slopes, matching intercepts
 #'          "one"        slope fixed at 1 (the national pattern unsquashed)
 #'   shrink              multiplies every fitted premium (1 = as fitted)
-apply_transfer_variant <- function(transfer, b_mode = c("fitted", "corrected", "one"), shrink = 1) {
+apply_transfer_variant <- function(transfer, b_mode = c("fitted", "corrected", "one"), shrink = 1,
+                                   calibrate = FALSE) {
   b_mode <- match.arg(b_mode)
   cf <- transfer$coefs
   if (b_mode == "corrected") cf <- mutate(cf, a = if_else(default_used, a, a_corr), b = if_else(default_used, b, b_corr))
   if (b_mode == "one") cf <- mutate(cf, a = if_else(default_used, a, a_one), b = 1)
+  if (calibrate) cf <- calibrate_intercepts(transfer$xy, cf)   # O13, L049: before halving
   cf <- mutate(cf, a = if_else(default_used, a, a * shrink))
   transfer$coefs <- cf
-  transfer$variant <- list(b_mode = b_mode, shrink = shrink)
+  transfer$variant <- list(b_mode = b_mode, shrink = shrink, calibrate = calibrate)
   transfer
+}
+
+#' Intercepts calibrated to reproduce the fitted election's totals (O13, L049).
+#'
+#' The fitted premium is a vote-weighted mean of district log-ratios, and the
+#' mean of log ratios is not the log ratio of the totals: predicting its own
+#' local election in-sample, the translation overstated the DA's provincial
+#' share by about 2 points and understated the ANC's by 1 to 2 in both cycles
+#' (L048). Here each fitted party's intercept is adjusted, with its slope
+#' fixed, until the in-sample prediction without noise reproduces every
+#' party's total votes among the parties in the fit (iterative proportional
+#' fitting on the intercepts). The common level is anchored to the original
+#' intercepts' mean, which the softmax ignores anyway.
+calibrate_intercepts <- function(xy, coefs, iter = 200, tol = 1e-9) {
+  d <- xy |> inner_join(select(coefs, group, a, b, default_used), by = "group") |>
+    mutate(votes = total_lge * share_lge)
+  keys <- distinct(d, muni_code, vd)
+  grp <- sort(unique(d$group))
+  r <- match(paste(d$muni_code, d$vd), paste(keys$muni_code, keys$vd)); c <- match(d$group, grp)
+  X <- matrix(-Inf, nrow(keys), length(grp)); X[cbind(r, c)] <- d$b * d$clr_npe
+  V <- matrix(0, nrow(keys), length(grp)); V[cbind(r, c)] <- d$votes
+  tot <- rowSums(V); actual <- colSums(V)
+  cf <- coefs |> filter(group %in% grp)
+  a_new <- cf$a[match(grp, cf$group)]
+  free <- !cf$default_used[match(grp, cf$group)] & actual > 0
+  a0 <- mean(a_new[free])
+  for (it in seq_len(iter)) {
+    pred <- colSums(softmax_rows(sweep(X, 2, a_new, "+")) * tot)
+    step <- log(actual) - log(pmax(pred, 1e-12))
+    a_new[free] <- a_new[free] + step[free]
+    a_new[free] <- a_new[free] - mean(a_new[free]) + a0
+    if (max(abs(step[free])) < tol) break
+  }
+  cal <- tibble(group = grp[free], a_cal = a_new[free])
+  coefs |> left_join(cal, by = "group") |>
+    mutate(a_uncal = a, a = coalesce(a_cal, a)) |> select(-a_cal)
 }
 
 # 3. Baseline for every 2026 voting district --------------------------------------
@@ -373,11 +438,12 @@ softmax_rows <- function(eta) {
 mean_preserving_offsets <- function(E, sd_local, K = 400, iter = 8, seed = 1) {
   target <- softmax_rows(E)
   delta <- matrix(0, nrow(E), ncol(E))
-  if (!is.finite(sd_local) || sd_local <= 0) return(delta)
+  sd_local <- rep_len(sd_local, ncol(E))       # one spread, or one per party (L049)
+  if (any(!is.finite(sd_local)) || all(sd_local <= 0)) return(delta)
   for (it in seq_len(iter)) {
     m <- matrix(0, nrow(E), ncol(E))
     for (k in seq_len(K)) {
-      e <- withr::with_seed(seed + k, matrix(rnorm(length(E), 0, sd_local), nrow(E)))
+      e <- withr::with_seed(seed + k, matrix(rnorm(length(E), 0, rep(sd_local, each = nrow(E))), nrow(E)))
       m <- m + softmax_rows(E + delta + e)
     }
     m <- m / K
@@ -467,10 +533,19 @@ simulate_municipality <- function(base_m, council, prov, other_w, swing_priors, 
     arrange(vd) |> select(all_of(groups)) |> as.matrix()
   C[is.na(C)] <- FALSE
   ratio <- wide |> distinct(group, log_ward_ratio) |> arrange(match(group, groups)) |> pull(log_ward_ratio)
+  # L049: one spread per party (config model.spreads: pooled | party), unless
+  # config fixes the spreads; newcomers keep the pooled spreads
+  sw_p <- rep(sd_ward, length(groups)); sv_p <- rep(sd_vd, length(groups))
+  if (identical(cfg$model$spreads, "party") && !is.null(transfer$sd_party) &&
+      is.null(sdc$ward_party) && is.null(sdc$vd_party)) {
+    sp <- transfer$sd_party
+    i <- match(groups, sp$group)
+    sw_p <- coalesce(sp$sd_ward[i], median(sp$sd_ward)); sv_p <- coalesce(sp$sd_vd[i], median(sp$sd_vd))
+  }
   # L047: optionally re-centre the local noise so each VD's expected shares
   # equal its baseline shares (config model.noise_centring: none | mean)
   if (identical(cfg$model$noise_centring, "mean"))
-    E <- E + mean_preserving_offsets(E, sqrt(sd_ward^2 + sd_vd^2), seed = cfg$model$seed + 7L)
+    E <- E + mean_preserving_offsets(E, sqrt(sw_p^2 + sv_p^2), seed = cfg$model$seed + 7L)
 
   # Newcomers (L035). They have no baseline, so they are inserted AFTER the
   # established parties' shares have been computed with all their shocks:
@@ -524,9 +599,9 @@ simulate_municipality <- function(base_m, council, prov, other_w, swing_priors, 
   set.seed(cfg$model$seed + sum(utf8ToInt(code)))
   for (d in seq_len(n_draws)) {
     shift <- prov_party[d, ] + rnorm(n_p, muni_mean, muni_sd)
-    ward_eff <- matrix(rnorm(n_w * n_p, 0, sd_ward), n_w, n_p)
+    ward_eff <- matrix(rnorm(n_w * n_p, 0, rep(sw_p, each = n_w)), n_w, n_p)
     eta <- E + rep(shift, each = n_v) + ward_eff[w_idx, , drop = FALSE] +
-      matrix(rnorm(n_v * n_p, 0, sd_vd), n_v, n_p)
+      matrix(rnorm(n_v * n_p, 0, rep(sv_p, each = n_v)), n_v, n_p)
     p_pr <- softmax_rows(eta)
     eta_w <- eta + rep(ratio, each = n_v)
     eta_w[!C] <- -Inf
