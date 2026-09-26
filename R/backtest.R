@@ -33,7 +33,7 @@ standing_from_results <- function(lge_truth) {
 }
 
 assemble_backtest_inputs <- function(npe_prev, lge_prev, npe_latest, lge_truth, councils,
-                                     municipalities, seat_truth = NULL, label = "backtest") {
+                                     municipalities, seat_truth = NULL, label = "backtest", interp_frac_value = 0.5) {
   # national-election rows belong to a council through their VD number
   vd_muni <- bind_rows(distinct(lge_truth, vd, muni_code), distinct(lge_prev, vd, muni_code)) |>
     distinct(vd, .keep_all = TRUE)
@@ -48,7 +48,7 @@ assemble_backtest_inputs <- function(npe_prev, lge_prev, npe_latest, lge_truth, 
     distinct(muni_code, ward_id, vd, registered) |> distinct(muni_code, vd, .keep_all = TRUE)
   list(
     label = label,
-    inputs = list(npe_prev = scope(by_vd(npe_prev)), lge_prev = scope(lge_prev),
+    inputs = list(interp_frac = interp_frac_value, npe_prev = scope(by_vd(npe_prev)), lge_prev = scope(lge_prev),
                   npe_latest = scope(by_vd(npe_latest)), vd_new = vd_new,
                   councils = scope(councils), contests = st$contests, pr_lists = st$pr_lists,
                   municipalities = municipalities),
@@ -104,11 +104,15 @@ backtest_truth <- function(lge_truth, councils, seat_truth = NULL) {
 #' (the backtest showed the premiums do not transfer between cycles, L027).
 prepare_chain <- function(inp, cfg, intercepts = c("fitted", "zero"), entrant_prior = NULL, entrant_overrides = NULL,
                           b_mode = cfg$model$transfer_b %||% "fitted", ward_ratio = cfg$model$ward_ratio %||% TRUE,
-                          shrink = cfg$model$premium_shrink %||% 1) {
+                          shrink = cfg$model$premium_shrink %||% 1,
+                          premium_basis = cfg$model$premium_basis %||% "earlier") {
   intercepts <- match.arg(intercepts)
   groups <- define_party_groups(inp$lge_prev, inp$npe_latest, cfg, inp$pr_lists)
   ow <- other_composition(groups, inp$lge_prev, inp$npe_latest)
-  tr <- apply_transfer_variant(fit_transfer(inp$npe_prev, inp$lge_prev, groups, cfg), b_mode, shrink)
+  interp <- premium_basis == "interpolated"
+  tr <- apply_transfer_variant(fit_transfer(inp$npe_prev, inp$lge_prev, groups, cfg,
+                                            npe_next = if (interp) inp$npe_latest, frac = if (interp) inp$interp_frac %||% 0.5),
+                               b_mode, shrink)
   if (intercepts == "zero") tr$coefs$a <- 0
   cg <- if (is.null(inp$contests)) NULL else inp$contests |>
     inner_join(select(groups, muni_code, party, group), by = c("muni_code", "party")) |>
@@ -116,7 +120,7 @@ prepare_chain <- function(inp, cfg, intercepts = c("fitted", "zero"), entrant_pr
   base <- build_baseline(inp$npe_latest, inp$lge_prev, inp$vd_new, groups, tr, cg, ward_ratio = ward_ratio)
   # with zero intercepts there is no learned premium to draw an unfitted party's from
   prem <- if (intercepts == "fitted") local_premium(groups, tr) else NULL
-  entrants <- if (!is.null(entrant_prior)) find_entrants(inp$pr_lists, inp$contests, groups) else tibble()
+  entrants <- if (!is.null(entrant_prior)) find_entrants(inp$pr_lists, inp$contests, groups, base) else tibble()
   list(inp = inp, groups = groups, other_w = ow, transfer = tr, baseline = base, premium = prem,
        intercepts = intercepts, entrants = entrants, entrant_prior = entrant_prior,
        entrant_overrides = entrant_overrides)
@@ -397,7 +401,42 @@ ward_diagnostics <- function(sc, naive_prev, naive_nat) {
                             TRUE ~ "both wrong"))
 }
 
-# 9. Everything together ------------------------------------------------------------------
+# 9. Premium basis (O10): pre-registered experiment (MODEL-LOG L044) ------------------------
+#
+# Written down before any result: 4 variants = premium basis {earlier national
+# vote (current), national vote interpolated to the local election's date} x
+# premium strength {halved (current), full}, at every other current setting.
+# Rule: choose the lowest mean seat CRPS among variants whose established-party
+# 90% coverage is in [0.80, 0.97] and whose ward Brier score is at most 0.005
+# worse than the current model's; adopt it only if it beats the current model
+# on seat CRPS. If none qualifies, nothing changes. For explanation, each
+# variant also reports the DA's and ANC's 2021 provincial PR share, predicted
+# against actual.
+
+backtest_premium_grid <- function(bt, cfg, n_draws = 400) {
+  actual <- bt$truth$pr |> summarise(votes = sum(votes), .by = party) |> mutate(share = votes / sum(votes))
+  cur_shrink <- cfg$model$premium_shrink %||% 1
+  g <- tidyr::expand_grid(premium_basis = c("earlier", "interpolated"), shrink = sort(unique(c(cur_shrink, 1)))) |>
+    pmap_dfr(\(premium_basis, shrink) {
+      prep <- prepare_chain(bt$inputs, cfg, "fitted", shrink = shrink, premium_basis = premium_basis)
+      ch <- simulate_chain(prep, cfg, n_draws)
+      sc <- score_chain(ch, bt$truth)
+      ps <- province_vote_share(ch$sims, prep$baseline)
+      # named share_of, not pick: inside mutate() dplyr's own pick() would win
+      share_of <- \(t, p) { i <- match(p, t$party); if (is.na(i)) NA_real_ else t$median[i] }
+      mutate(sc$summary, premium_basis = premium_basis, shrink = shrink,
+             da_pred = share_of(ps, "DEMOCRATIC ALLIANCE"), da_actual = share_of(actual |> rename(median = share), "DEMOCRATIC ALLIANCE"),
+             anc_pred = share_of(ps, "AFRICAN NATIONAL CONGRESS"), anc_actual = share_of(actual |> rename(median = share), "AFRICAN NATIONAL CONGRESS"),
+             .before = 1)
+    })
+  cur <- g$premium_basis == (cfg$model$premium_basis %||% "earlier") & g$shrink == cur_shrink
+  g |> mutate(current = cur,
+              eligible = pit_cov90 >= 0.80 & pit_cov90 <= 0.97 & ward_brier <= ward_brier[cur] + 0.005,
+              best = eligible & seat_crps == if (any(eligible)) min(seat_crps[eligible]) else -Inf,
+              adopt = best & !current & seat_crps < seat_crps[cur])
+}
+
+# 10. Everything together -----------------------------------------------------------------
 
 run_backtest <- function(bt, cfg, entrant_prior = NULL) {
   n <- cfg$backtest$n_draws %||% 1000
@@ -419,8 +458,10 @@ run_backtest <- function(bt, cfg, entrant_prior = NULL) {
   grid <- backtest_grid(bt, cfg, n_draws = cfg$backtest$grid_draws %||% 400)
   newcomers <- backtest_entrants(bt, cfg, entrant_prior, n, sc_cfg)
   ward_grid <- backtest_ward_grid(bt, cfg, entrant_prior, n_draws = cfg$backtest$grid_draws %||% 400)
+  premium_grid <- backtest_premium_grid(bt, cfg, n_draws = cfg$backtest$grid_draws %||% 400)
   list(
     label = bt$label, grid = grid, newcomers = newcomers, ward_grid = ward_grid, wards = wards_diag,
+    premium_grid = premium_grid,
     summary = bind_rows(mutate(sc_cfg$summary, spreads = "config"), mutate(sc_est$summary, spreads = "estimated")),
     versus_rules = bind_rows(model_rows, naive),
     shock_sds = tibble(parameter = c("province_party", "muni_party"),
@@ -459,7 +500,8 @@ assemble_live_backtest <- function(cfg, npe2014_file, lge2016_files, npe_files, 
     lge_prev = map_dfr(lge2016_files, read_iec_lge_csv, election = "LGE2016"),
     npe_latest = read_iec_npe_portal(npe_files[str_detect(npe_files, "npe2019")], "NPE2019", prov_names),
     lge_truth = lge2021, councils = councils21, municipalities = model_munis,
-    seat_truth = seat_truth, label = "2021 local election, predicted blind from 2014, 2016 and 2019") |>
+    seat_truth = seat_truth, label = "2021 local election, predicted blind from 2014, 2016 and 2019",
+    interp_frac_value = interp_frac(cfg$dates$npe2014, cfg$dates$lge2016, cfg$dates$npe2019)) |>
     c(list(lge2011 = if (length(lge2011_files)) map_dfr(lge2011_files, read_iec_lge_csv, election = "LGE2011") |>
                        filter(muni_code %in% model_munis$muni_code)))
 }
@@ -477,6 +519,7 @@ write_backtest_outputs <- function(res) {
   dir.create(path_public(), showWarnings = FALSE, recursive = TRUE)
   tabs <- list(backtest_summary = mutate(res$summary, label = res$label), backtest_grid = res$grid,
                backtest_newcomers = res$newcomers, backtest_ward_grid = res$ward_grid,
+               backtest_premium_grid = res$premium_grid,
                backtest_wards = res$wards,
                backtest_versus_rules = res$versus_rules, backtest_shock_sds = res$shock_sds,
                backtest_party_surprise = res$party_surprise, backtest_seats = res$seats,

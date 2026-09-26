@@ -128,6 +128,23 @@ if (file.exists(pub("backtest_wards.csv"))) {
 }
 ```
 
+## Premium basis: a pre-registered experiment
+
+A party's learned local premium compares its local vote with its national vote. Measured against the *earlier* national election, the premium also absorbs whatever swing happened between the two elections (O10). The alternative measures it against the national vote *interpolated* to the local election's date. Four variants were compared, with the rule fixed in the [model log](log.qmd) before the result: the lowest seat CRPS among calibrated variants that are no more than 0.005 worse on ward Brier score, adopted only if it beats the current model.
+
+```{r}
+pa <- \(p, a) if_else(is.na(p) | is.na(a), "n/a", sprintf("%s / %s", pct(p, 1), pct(a, 1)))
+if (file.exists(pub("backtest_premium_grid.csv"))) rd("backtest_premium_grid.csv") |>
+  arrange(seat_crps) |>
+  transmute(`Premium basis` = premium_basis, Strength = if_else(shrink == 1, "full", "halved"),
+            `Seat CRPS` = round(seat_crps, 4), `90% coverage` = pct(pit_cov90), `Ward Brier` = round(ward_brier, 4),
+            `DA 2021: predicted / actual` = pa(da_pred, da_actual),
+            `ANC 2021: predicted / actual` = pa(anc_pred, anc_actual),
+            Result = case_when(adopt ~ "adopted", current ~ "current model", best ~ "best, not better than current",
+                               !eligible ~ "fails calibration or ward condition", TRUE ~ "")) |>
+  knitr::kable()
+```
+
 ## What the model could not see
 
 ```{r}

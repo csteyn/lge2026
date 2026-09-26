@@ -34,7 +34,7 @@ classify_absences <- function(notable, party_status = NULL) {
 
 run_checks <- function(inputs, groups, transfer, baseline, summaries, cfg, seat_validation = NULL,
                        party_status = NULL, premium = NULL, entrant_table = NULL, poll_comparison = NULL,
-                       entrant_total = NULL) {
+                       entrant_total = NULL, entrant_stability = NULL) {
   lge <- inputs$lge2021
   imp_turnout <- lge |> filter(ballot == "PR") |> distinct(muni_code, vd, registered, spoilt, vd_valid) |>
     filter((vd_valid + spoilt) / registered > 1.05)
@@ -167,12 +167,21 @@ run_checks <- function(inputs, groups, transfer, baseline, summaries, cfg, seat_
     et <- entrant_total
     over <- et$simulated |> filter(median_total > et$hist_p95) |> arrange(desc(median_total))
     out <- bind_rows(out, check_row(
-      "C20", "Newcomers", "Councils where newcomers' simulated combined share (median) exceeds the 95th percentile of past councils' newcomer totals",
+      "C20", "Newcomers", sprintf("Councils where newcomers' simulated combined share (median) exceeds the 95th percentile of past councils' newcomer totals (module %s)",
+                                  if (isTRUE(cfg$model$entrants)) "in use" else "off; diagnostic only"),
       nrow(over),
       sprintf("history: 95th percentile %.1f%%, maximum %.1f%% (%d council-elections); %s",
               100 * et$hist_p95, 100 * et$hist_max, nrow(et$history),
               paste(sprintf("%s %.1f%%", over$muni_code, 100 * over$median_total), collapse = ", ")),
       fail_if = nrow(over) > 0, severity = "critical"))
+  }
+
+  if (!is.null(entrant_stability) && nrow(entrant_stability)) {
+    st <- entrant_stability
+    out <- bind_rows(out, check_row(
+      "C21", "Newcomers", "Newcomer-model coefficients that differ between the earliest year alone and all years pooled by more than two standard errors (the backtest tests the earliest-year fit; 2026 uses the pooled one)",
+      sum(st$differs), paste(sprintf("%s %.2f vs %.2f (z %.1f)", st$term, st$estimate_first, st$estimate_pooled, st$z), collapse = "; "),
+      severity = "major"))
   }
 
   if (!is.null(poll_comparison) && nrow(poll_comparison)) {

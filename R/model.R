@@ -106,7 +106,13 @@ group_shares <- function(results, groups, alpha = 0.5) {
     )
 }
 
-fit_transfer <- function(npe_prev, lge_prev, groups, cfg) {
+#' Where the local election falls between the national elections either side
+#' of it, as a fraction of the interval (L044)
+interp_frac <- function(prev, local, nxt) {
+  as.numeric(as.Date(local) - as.Date(prev)) / as.numeric(as.Date(nxt) - as.Date(prev))
+}
+
+fit_transfer <- function(npe_prev, lge_prev, groups, cfg, npe_next = NULL, frac = NULL) {
   # Local-only parties are removed from the LGE side and the rest renormalised,
   # mirroring build_baseline(), where national parties share (1 - local mass).
   g <- groups |> filter(origin != "local_only")
@@ -114,6 +120,16 @@ fit_transfer <- function(npe_prev, lge_prev, groups, cfg) {
   if (nrow(g) == 0) stop("fit_transfer(): no national party groups to fit; groups table is empty upstream",
                          call. = FALSE)
   x <- group_shares(npe_prev, g) |> select(muni_code, vd, group, clr_npe = clr, total_npe = total, share_npe = share)
+  # Premium basis "interpolated" (L044): compare the local vote with the
+  # national vote interpolated to the local election's date, between the
+  # national elections either side, so the swing between elections is not
+  # learned as a local premium (the suspected cause of the DA's 2021
+  # overshoot and the ANC's 2026 undershoot, O10).
+  if (!is.null(npe_next) && !is.null(frac)) {
+    x2 <- group_shares(npe_next, g) |> select(muni_code, vd, group, clr_next = clr)
+    x <- inner_join(x, x2, by = c("muni_code", "vd", "group")) |>
+      mutate(clr_npe = (1 - frac) * clr_npe + frac * clr_next) |> select(-clr_next)
+  }
   y <- lge_prev |>
     filter(ballot == "PR") |>
     anti_join(local, by = c("muni_code", "party")) |>

@@ -6,7 +6,7 @@ test_that("first-timers are found by conservative name key, with coverage and br
   res <- tibble(muni_code = c("A", "A", "A", "A", "B", "B"), ward_id = c("A1", "A1", "A2", NA, "B1", "B1"),
                 ballot = c("Ward", "Ward", "Ward", "PR", "Ward", "Ward"),
                 party = c("OLD PARTY", "TIDY MOVEMENT", "NEW LOCALS", "NEW LOCALS", "NATIONAL ONE", "NEW LOCALS"),
-                votes = c(50L, 20L, 30L, 40L, 60L, 10L))
+                votes = c(50L, 20L, 30L, 40L, 60L, 10L), vd = c("a1", "a1", "a2", "a1", "b1", "b1"), registered = 500L)
   ft <- first_timers(res, hist_lge, hist_npe, 2021)
   expect_setequal(paste(ft$muni_code, ft$party), c("A NEW LOCALS", "B NEW LOCALS"))  # TIDY = THE TIDY MOVEMENT
   a <- filter(ft, muni_code == "A")
@@ -14,26 +14,35 @@ test_that("first-timers are found by conservative name key, with coverage and br
   expect_equal(a$share, 70 / 140)
 })
 
-test_that("the prior estimates cross-council correlation and falls back for thin classes", {
-  set.seed(3)
-  base <- tibble(year = 2016, party = rep(sprintf("P%02d", 1:15), each = 3), muni_code = rep(c("A", "B", "C"), 15),
-                 coverage = 1, history_in_province = FALSE) |>
-    mutate(councils = 3L, share = exp(rep(rnorm(15, -4, 1), each = 3) + rnorm(45, 0, 0.1)))
-  pr <- estimate_entrant_prior(base, min_cell = 8)
-  expect_gt(pr$rho, 0.8)                                    # shares move together within a party
-  expect_equal(pr$rho_source, "estimated")
-  expect_match(entrant_pool(pr, councils = 1, coverage = 1)$basis, "all newcomers")  # empty class -> fallback
+test_that("newcomer model v2 counts each party once and recovers a known size effect (L044)", {
+  set.seed(4)
+  sizes <- c(A = 5e3, B = 5e4, C = 5e5)
+  one <- tibble(year = 2021, party = sprintf("L%02d", 1:40), muni_code = sample(names(sizes), 40, TRUE), councils = 1L)
+  big <- tibble(year = 2021, party = "WIDE", muni_code = rep(names(sizes), 10), councils = 30L)  # one party, 30 cases
+  ft <- bind_rows(one, big) |>
+    mutate(registered = sizes[muni_code], coverage = 1, history_in_province = FALSE,
+           share = plogis(-1 - 1 * (log(registered) - log(5e3)) + rnorm(n(), 0, 0.3)))
+  ft$share[ft$party == "WIDE"] <- 0.25                                        # an outlier party
+  m <- estimate_entrant_model(ft)
+  expect_equal(m$n_parties, 41)
+  expect_lt(abs(coef(m$fit)[["lg_size"]] + 1), 0.35)                        # the 30 WIDE cases count as one party
+  expect_true(m$rho >= 0 && m$rho <= 0.95)
 })
 
-test_that("draws are correlated across a party's councils, capped, and overrides apply", {
-  ex <- tibble(share = exp(seq(-7, -1, length.out = 60)), cls = entrant_class(3, 1), breadth = "2-10 councils")
-  pr <- list(examples = ex, rho = 0.9, min_cell = 8)
-  ent <- tibble(muni_code = c("A", "B", "A"), party = c("WIDE", "WIDE", "BIG"), coverage = 1, councils = c(3L, 3L, 3L))
+test_that("v2 draws are correlated within a party, capped, and overrides still apply", {
+  set.seed(5)
+  ft <- tibble(year = 2021, party = rep(sprintf("P%02d", 1:20), each = 3), muni_code = rep(c("A", "B", "C"), 20),
+               councils = 3L, coverage = 1, registered = 2e4, history_in_province = FALSE) |>
+    mutate(share = plogis(rep(rnorm(20, -4, 1), each = 3) + rnorm(60, 0, 0.3)))
+  pr <- estimate_entrant_model(ft)
+  expect_gt(pr$rho, 0.5)
+  ent <- tibble(muni_code = c("A", "B", "A"), party = c("WIDE", "WIDE", "BIG"), coverage = 1, councils = 3L,
+                registered = 2e4, history_in_province = FALSE)
   ov <- tibble(party = "BIG", median = 0.5, q90 = 0.7, source = "test", date_added = "x")
-  d <- draw_entrant_shares(ent, pr, 2000, 1, overrides = ov, max_total = 0.8)
-  expect_gt(cor(qnorm(rank(d$A[, "WIDE"]) / 2001), qnorm(rank(d$B[, "WIDE"]) / 2001)), 0.8)
+  d <- draw_entrant_shares(ent, pr, 3000, 1, overrides = ov, max_total = 0.8)
+  expect_gt(cor(qlogis(d$A[, "WIDE"]), qlogis(d$B[, "WIDE"])), 0.3)
   expect_true(all(rowSums(d$A) <= 0.8 + 1e-9))
-  expect_equal(median(d$B[, "WIDE"]), median(ex$share), tolerance = 0.3)
+  expect_equal(median(d$B[, "WIDE"]), unname(plogis(predict(pr$fit, entrant_features(ent[2, ])))), tolerance = 0.2)
 })
 
 test_that("the simulation reproduces each drawn newcomer share exactly and respects ward contests", {

@@ -34,6 +34,8 @@ weighted by votes. Parties that did not stand in both elections in a municipalit
 
 **Known bias.** Because the 2019 shares are themselves noisy, `b` is biased towards zero (attenuation), which compresses spatial contrasts. An errors-in-variables correction (dividing each slope by the party's reliability, estimated from the sampling noise of its 2019 shares) halves the slope error on synthetic data with known truth. A pre-registered experiment on ward winners (L039-L040) found that this correction made seats worse. The model instead carries the translation forward with **slopes fixed at 1** (the national spatial pattern, unsquashed, with intercepts re-estimated) and **learned premiums halved**: the premiums carry information, but overshoot for individual parties.
 
+**Which national vote the premium is measured against.** The premium compares the 2021 local vote with the 2019 national vote, so any swing between May 2019 and November 2021 is learned as "local" and carried into 2026. The alternative compares it with the national vote interpolated to the local election's date, between the 2019 and 2024 national elections. Which one the model uses is decided by a pre-registered backtest (L044, O10); until then it uses the earlier election (A20).
+
 ## Step 3: the 2026 baseline
 
 The fitted transfer is applied to 2024 national results for every VD on the 2026 voting-district layer. Parties that stand only in local elections keep their 2021 share (A05) and the national parties share the remainder. VDs with no history, mostly new districts split off by the 2026 ward delimitation, take the registered-voter-weighted average of their 2026 ward, or of their municipality if the ward has no history (check C05). Every VD's shares are then renormalised to sum to one (MODEL-LOG L004).
@@ -55,7 +57,9 @@ Ward winners are the plurality on the ward ballot. Combined votes go through Sch
 
 ## Parties with no history
 
-Parties standing in a council for the first time have no past vote to build on. Each simulated election draws their council share from how past Western Cape newcomers of the same breadth (1, 2-10 or 11+ councils) and ward coverage actually did, with a party's draws correlated across the councils it stands in. The share is taken proportionally from all other parties. A party-specific prior, such as one based on polls, can replace this only with a named source. Whether this improves the forecast is decided by a pre-registered backtest (L035).
+Parties standing in a council for the first time have no past vote to build on. **The newcomer module is currently switched off (L043)**, so these parties are not in the forecast; the draws described here are computed and shown as a diagnostic only.
+
+The model (v2, L044) predicts a newcomer's council share from how past Western Cape newcomers did, using a regression on their ward coverage, whether they stood in every ward, how many councils they stood in, the council's size (registered voters) and whether they had history elsewhere in the province. Each past party counts once, however many councils it stood in, so one party's surge cannot dominate (the flaw that switched v1 off). Each simulated election draws a share around the prediction, with part of the uncertainty shared by a party across all its councils. The share is taken proportionally from all other parties. A party-specific prior, such as one based on polls, can replace the prediction only with a named source. The module is used only if it passes a pre-registered backtest *and* its simulated newcomer totals stay within what past councils have seen (check C20).
 
 ## Polls
 

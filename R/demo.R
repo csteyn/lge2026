@@ -162,7 +162,8 @@ make_demo_first_timers <- function(seed = 11) {
     tibble(year = rep(c(2016, 2021), each = 40), muni_code = sample(c("DEM1", "DEM2", "DEM3"), 80, TRUE),
            party = sprintf("PAST PARTY %02d", sample(1:30, 80, TRUE)),
            share = pmin(rlnorm(80, log(0.008), 1.2), 0.3), coverage = sample(c(1, 1, 0.4), 80, TRUE),
-           history_in_province = FALSE) |>
+           registered = c(DEM1 = 60000, DEM2 = 12000, DEM3 = 25000)[muni_code],
+           history_in_province = sample(c(TRUE, FALSE), 80, TRUE, prob = c(0.1, 0.9))) |>
       mutate(councils = n_distinct(muni_code), .by = c(year, party))
   })
 }

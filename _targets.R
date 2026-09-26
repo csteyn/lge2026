@@ -92,8 +92,13 @@ list(
   tar_target(scoped, scope_inputs(inputs, model_munis)),
   tar_target(groups, define_party_groups(scoped$lge2021, scoped$npe2024, cfg, scoped$pr_lists)),
   tar_target(other_w, other_composition(groups, scoped$lge2021, scoped$npe2024)),
-  tar_target(transfer, apply_transfer_variant(fit_transfer(scoped$npe2019, scoped$lge2021, groups, cfg),
-                                              cfg$model$transfer_b %||% "fitted", cfg$model$premium_shrink %||% 1)),
+  tar_target(transfer, {
+    interp <- identical(cfg$model$premium_basis, "interpolated")   # L044
+    apply_transfer_variant(
+      fit_transfer(scoped$npe2019, scoped$lge2021, groups, cfg, npe_next = if (interp) scoped$npe2024,
+                   frac = if (interp) interp_frac(cfg$dates$npe2019, cfg$dates$lge2021, cfg$dates$npe2024)),
+      cfg$model$transfer_b %||% "fitted", cfg$model$premium_shrink %||% 1)
+  }),
   tar_target(contests_g, if (is.null(scoped$contests)) NULL else scoped$contests |>
                inner_join(select(groups, muni_code, party, group), by = c("muni_code", "party")) |>
                distinct(muni_code, ward_id, group)),
@@ -112,17 +117,24 @@ list(
 
   # newcomers (L035): prior from past newcomers; used in the forecast only
   # when config model.entrants is true (set by the pre-registered test)
-  tar_target(entrant_prior, estimate_entrant_prior(first_timer_data, cfg$model$entrant_min_cell %||% 8)),
+  tar_target(entrant_prior, estimate_entrant_model(first_timer_data)),
   tar_target(backtest_entrant_prior, {
     ft <- filter(first_timer_data, year == 2016)
-    if (nrow(ft) >= 20) estimate_entrant_prior(ft, cfg$model$entrant_min_cell %||% 8) else NULL
+    if (nrow(ft) >= 20) estimate_entrant_model(ft) else NULL
   }),
   tar_target(entrant_overrides_file, "data-raw/manual/entrant_priors.csv", format = "file"),
   tar_target(entrant_overrides, read_entrant_overrides(entrant_overrides_file)),
-  tar_target(entrants, if (isTRUE(cfg$model$entrants)) find_entrants(scoped$pr_lists, scoped$contests, groups) else tibble()),
-  tar_target(entrant_draws, draw_entrant_shares(entrants, entrant_prior, cfg$model$n_draws, cfg$model$seed + 7,
-                                                entrant_overrides)),
-  tar_target(entrant_table, describe_entrants(entrants, entrant_prior, entrant_draws, entrant_overrides)),
+  # Newcomers are always drawn, as a diagnostic: check C20 must be able to test
+  # a model that is switched off. The forecast uses them only when
+  # model.entrants is true (L044). Council sizes come from the baseline's
+  # registration (imputed where the MDB field is empty, C12).
+  tar_target(entrants_all, find_entrants(scoped$pr_lists, scoped$contests, groups, baseline)),
+  tar_target(entrant_stability, entrant_model_stability(first_timer_data)),
+  tar_target(entrant_draws_all, draw_entrant_shares(entrants_all, entrant_prior, cfg$model$n_draws, cfg$model$seed + 7,
+                                                    entrant_overrides)),
+  tar_target(entrant_draws, if (isTRUE(cfg$model$entrants)) entrant_draws_all else list()),
+  tar_target(entrant_table, describe_entrants(entrants_all, entrant_prior, entrant_draws_all, entrant_overrides) |>
+               mutate(used_in_forecast = isTRUE(cfg$model$entrants))),
 
   # one branch per municipality
   tar_group_by(baseline_m, baseline, muni_code),
@@ -142,7 +154,7 @@ list(
   # --- checks and publication ------------------------------------------------------
   tar_target(checks, run_checks(scoped, groups, transfer, baseline, summaries, cfg, seat_validation,
                                   party_status, premium, entrant_table, poll_comparison,
-                                  entrant_total_check(entrant_draws, first_timer_data))),
+                                  entrant_total_check(entrant_draws_all, first_timer_data), entrant_stability)),
   tar_target(assumptions_file, "data-raw/manual/assumptions.csv", format = "file"),
   tar_target(errata_file, "ERRATA.md", format = "file"),
   tar_target(public, {

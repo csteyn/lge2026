@@ -46,14 +46,18 @@ if (file.exists(pub("byelection_placebo.csv"))) {
 ## Parties standing for the first time
 
 ```{r}
+#| results: asis
 if (file.exists(pub("newcomers.csv"))) {
-  rd("newcomers.csv") |>
+  nw <- rd("newcomers.csv")
+  if ("used_in_forecast" %in% names(nw) && !any(nw$used_in_forecast))
+    cat("*The newcomer model is switched off (MODEL-LOG L043-L044). These draws are shown as a diagnostic and are not used in the forecast.*\n\n")
+  nw |>
     left_join(select(municipalities, muni_code, muni_name), by = "muni_code") |>
     arrange(desc(share_median)) |>
     transmute(Council = muni_name, Party = party, `Stands in` = paste(councils, "councils"),
               `Share (median)` = pct(share_median, 1),
               `90% range` = sprintf("%s to %s", pct(share_q05, 1), pct(share_q95, 1)), Basis = basis) |>
-    knitr::kable()
+    knitr::kable() |> print()
 } else {
   cat("The newcomer module is not switched on yet (see the backtest page).")
 }

@@ -15,7 +15,8 @@ cfg <- yaml::read_yaml(test_path("..", "..", "config.yml"))
 
 test_that("backtest inputs follow the forecast contract, and standing comes from the truth year", {
   expect_setequal(names(bt$inputs), c("npe_prev", "lge_prev", "npe_latest", "vd_new", "councils",
-                                      "contests", "pr_lists", "municipalities"))
+                                      "contests", "pr_lists", "municipalities", "interp_frac"))
+  expect_true(bt$inputs$interp_frac > 0 && bt$inputs$interp_frac < 1)
   expect_true(all(c("seats", "winners", "pr") %in% names(bt$truth)))
   expect_equal(sum(bt$truth$seats$seats), sum(d$councils$total_seats))
 })

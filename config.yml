@@ -21,11 +21,15 @@ model:
   byelection_since: "2024-05-29"
   # Newcomer module (L035). Off until the pre-registered backtest adopts it.
   entrants: false
-  entrant_min_cell: 8
+  entrant_min_cell: 8         # v1 only; unused since the v2 model (L044)
   byelection_min_wards: 3
   transfer_b: one
   ward_ratio: false
   premium_shrink: 0.5
+  # Premium basis (O10, L044): compare the local vote with the earlier national
+  # vote ("earlier"), or with the national vote interpolated to the local
+  # election's date ("interpolated"). Chosen by the pre-registered backtest.
+  premium_basis: earlier
   sd:                        # shocks on the log-share scale (A02)
     # Chosen by the pre-registered 2021 backtest (MODEL-LOG L027-L028): lowest
     # seat CRPS among 24 settings with 90% coverage in [0.80, 0.97]. Formerly
@@ -42,6 +46,14 @@ model:
 backtest:
   n_draws: 1000             # the two headline runs
   grid_draws: 400           # each of the 24 pre-registered settings (L027)
+
+# Election dates, for interpolating national votes to local election dates (L044)
+dates:
+  npe2014: "2014-05-07"
+  lge2016: "2016-08-03"
+  npe2019: "2019-05-08"
+  lge2021: "2021-11-01"
+  npe2024: "2024-05-29"
 
 publish:
   provinces: [WC]
