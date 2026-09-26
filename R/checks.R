@@ -157,7 +157,7 @@ run_checks <- function(inputs, groups, transfer, baseline, summaries, cfg, seat_
   if (!is.null(entrant_table) && nrow(entrant_table)) {
     wide_prior_only <- entrant_table |> filter(councils >= 11, !str_starts(basis, "override")) |> distinct(party)
     out <- bind_rows(out, check_row(
-      "C18", "Newcomers", "Parties standing in 11+ councils with no history, modelled from the class prior (a sourced override may describe them better)",
+      "C18", "Newcomers", "Newcomers standing in 11+ councils whose share comes from the newcomer model rather than a sourced override (an override may describe a wide party better)",
       nrow(wide_prior_only),
       sprintf("%d newcomer cases modelled; %s", nrow(entrant_table), paste(wide_prior_only$party, collapse = ", ")),
       severity = "minor"))

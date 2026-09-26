@@ -24,6 +24,10 @@ test_that("the premium experiment applies its pre-registered rule", {
   expect_equal(nrow(pg), 4); expect_equal(sum(pg$current), 1)
   expect_true(all(c("da_pred", "da_actual", "anc_pred", "anc_actual") %in% names(pg)))
   expect_true(all(!pg$adopt | (pg$eligible & pg$seat_crps < pg$seat_crps[pg$current])))
+  # the reported paired difference (L045) is zero for the current model and matches the CRPS gap
+  expect_equal(pg$crps_diff[pg$current], 0)
+  expect_equal(pg$crps_diff, pg$seat_crps - pg$seat_crps[pg$current], tolerance = 1e-8)
+  expect_true(all(pg$crps_diff_lo <= pg$crps_diff + 1e-12 & pg$crps_diff <= pg$crps_diff_hi + 1e-12))
   if (!any(pg$eligible)) expect_equal(sum(pg$adopt), 0)
 })
 

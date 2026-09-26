@@ -130,19 +130,27 @@ if (file.exists(pub("backtest_wards.csv"))) {
 
 ## Premium basis: a pre-registered experiment
 
-A party's learned local premium compares its local vote with its national vote. Measured against the *earlier* national election, the premium also absorbs whatever swing happened between the two elections (O10). The alternative measures it against the national vote *interpolated* to the local election's date. Four variants were compared, with the rule fixed in the [model log](log.qmd) before the result: the lowest seat CRPS among calibrated variants that are no more than 0.005 worse on ward Brier score, adopted only if it beats the current model.
+A party's learned local premium compares its local vote with its national vote. Measured against the *earlier* national election, the premium also absorbs whatever swing happened between the two elections (O10). The alternative measures it against the national vote *interpolated* to the local election's date. Four variants were compared, with the rule fixed in the [model log](log.qmd) before the result: the lowest seat CRPS among calibrated variants that are no more than 0.005 worse on ward Brier score, adopted only if it beats the current model. The interpolated basis at half strength won and is now the current model (L045). It corrected the DA's level but not the ANC's, and it cost two councils on control, which the rule did not consider. The interval column, added after the decision, shows how far each variant is from the current model, with a bootstrap over councils.
 
 ```{r}
 pa <- \(p, a) if_else(is.na(p) | is.na(a), "n/a", sprintf("%s / %s", pct(p, 1), pct(a, 1)))
-if (file.exists(pub("backtest_premium_grid.csv"))) rd("backtest_premium_grid.csv") |>
+if (file.exists(pub("backtest_premium_grid.csv"))) {
+  pg <- rd("backtest_premium_grid.csv")
+  if (!"crps_diff" %in% names(pg)) pg <- mutate(pg, crps_diff = NA_real_, crps_diff_lo = NA_real_, crps_diff_hi = NA_real_)
+  pg |>
   arrange(seat_crps) |>
   transmute(`Premium basis` = premium_basis, Strength = if_else(shrink == 1, "full", "halved"),
-            `Seat CRPS` = round(seat_crps, 4), `90% coverage` = pct(pit_cov90), `Ward Brier` = round(ward_brier, 4),
+            `Seat CRPS` = round(seat_crps, 4),
+            `vs current (90% interval)` = if_else(current | is.na(crps_diff), "",
+                                                   sprintf("%+.4f (%+.4f to %+.4f)", crps_diff, crps_diff_lo, crps_diff_hi)),
+            `90% coverage` = pct(pit_cov90), `Ward Brier` = round(ward_brier, 4),
+            `Councils correct` = pct(control_modal_correct),
             `DA 2021: predicted / actual` = pa(da_pred, da_actual),
             `ANC 2021: predicted / actual` = pa(anc_pred, anc_actual),
             Result = case_when(adopt ~ "adopted", current ~ "current model", best ~ "best, not better than current",
                                !eligible ~ "fails calibration or ward condition", TRUE ~ "")) |>
   knitr::kable()
+}
 ```
 
 ## What the model could not see

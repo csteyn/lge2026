@@ -4,8 +4,8 @@ A running engineering record: decisions with their reasons, errors found (includ
 
 ## Open obstacles
 
-- **O10. The ANC may be under-predicted in 2026 (L044).** Without newcomers, the model's Western Cape ANC share sits well below both the Ipsos poll (25%) and the 2024 provincial result (19.6%), and the poll lies outside the model's 90% range. (The figure itself stays private until the publication decision, L029.) Suspected cause: each party's local premium is measured against the *earlier* national election, so the swing between the national and local elections is learned as a premium. A pre-registered experiment (L044) tests measuring it against the national vote interpolated to the local election's date.
-- **O9. The newcomer module is off (L043); model v2 is built and awaiting its pre-registered test (L044).** Until it passes, parties with no history are invisible, as in v0.1 (the backtest cost of that blindness: 46 seats in 2021).
+- **O10. The ANC may be under-predicted in 2026. Interpolated premium basis adopted (L045); its effect on the ANC not yet seen.** Without newcomers, the model's Western Cape ANC share sat well below both the Ipsos poll (25%) and the 2024 provincial result (19.6%), with the poll outside the model's 90% range. The suspected cause, swing between elections learned as a local premium, is addressed by the interpolated basis, which won its pre-registered test on overall scores. The backtest does not show it fixing the ANC: in 2021 it made the ANC's over-prediction slightly larger. The next run shows its effect on 2026. The poll gap is not a target.
+- **O9. Newcomer model v2 passed its pre-registered test at the old settings (L045); the rerun at the adopted premium basis is pending.** Until it passes there, parties with no history are invisible, as in v0.1 (the backtest cost of that blindness: 46 seats in 2021).
 - **O7. Largely resolved (L040).** On ward Brier score the model now beats the national-vote rule (0.157 against about 0.182); on plain accuracy it trails by about 3 of 406 wards (90.1% against 90.9%).
 - **O8. Closed (L041).** Polls are not used as inputs; their Western Cape record in 2024 shows a consistent under-estimate of the DA that one data point per pollster cannot correct. They are published as a cross-check (Polls page, check C19).
 - **O1. The live data path is partly verified** (IEC local-election reports and MDB 2026 layers fetched and parsed on 2026-09-24; national-election files, candidate lists and the full live run not yet). Each remaining step is treated as untested until it has run on real files.
@@ -16,6 +16,30 @@ A running engineering record: decisions with their reasons, errors found (includ
 - **O5. Resolved for the Patriotic Alliance (L023).** The National Coloured Congress, the People's Movement for Change and the ATM have too little by-election evidence and keep the prior; their intervals are correspondingly wide.
 
 ## 2026-09-26
+
+**L045. Results of the L044 experiments: the interpolated premium basis is adopted; newcomer v2 passes at the old settings and is re-tested at the new ones.** The rules were committed and pushed before the run (commit `baa3bcf`, dated 26 September 2026 08:50 SAST; a commit date comes from the committer's clock, and GitHub's push record is the server-side evidence). The same commit also added `first_timers.csv` at the project root by mistake: historical newcomer data exported for the redesign, not a forecast output. It is removed.
+
+*Premium basis.* The 2021 backtest, 400 draws per variant with the same random numbers, 390 common cases:
+
+| Variant | Seat CRPS | 90% coverage | Ward Brier | Wards correct | Control Brier | Councils correct | DA 2021 | ANC 2021 |
+|---|---|---|---|---|---|---|---|---|
+| earlier, halved (current) | 0.4050 | 88.5% | 0.1571 | 89.9% | 0.298 | 21 of 25 | 53.4% | 24.3% |
+| earlier, full | 0.4175 | 85.8% | 0.1751 | 87.7% | 0.363 | 18 | 54.9% | 21.1% |
+| **interpolated, halved** | **0.4014** | 88.0% | 0.1513 | 90.4% | 0.339 | 19 | 54.7% | 24.9% |
+| interpolated, full | 0.4083 | 86.6% | 0.1634 | 87.9% | 0.449 | 14 | 57.1% | 22.4% |
+
+Actual 2021: DA 54.7%, ANC 20.5%. Both full-strength variants fail the ward condition (0.018 and 0.006 worse than current). The interpolated basis at half strength is eligible, best, and lower than the current model on seat CRPS by 0.0036 (0.9%). **Under the rule it is adopted: `premium_basis: interpolated`** (A20). What the result shows, and what it does not:
+
+- It fixed the mechanism it was designed for in the DA's case: the predicted DA share moved from 53.4% to 54.7%, against 54.7% actual.
+- It did not help the ANC in 2021: 24.3% became 24.9%, against 20.5%. The ANC's 2021 fall was larger than either basis learned from 2014-2016. The backtest therefore supports the change on overall scores, not as a fix for the ANC. Its effect on the 2026 ANC gap (O10) will be seen in the next run; that gap played no part in the decision and will not.
+- The margin is small. The comparison is paired (shared random numbers), but the rule required no interval. From the next run the grid also reports each variant's paired difference from the current model with a 90% bootstrap interval over councils, as the newcomer test does. This is reporting only; it cannot reverse the decision.
+- A cost outside the rule: council control got worse (Brier 0.298 to 0.339; the most likely outcome right in 19 councils rather than 21). Control is scored in 2026 (SCORING.md) but was in neither the ward rule (L039) nor this one. Two councils of 25 is within noise, but it is reported, not explained away. **Lesson:** future experiments include council control as a guard condition. It is not applied retroactively, because changing a rule after seeing its result defeats the purpose of fixing it first.
+
+*Newcomer v2, at the old settings.* Coefficients fitted on 2016's newcomers only, 147 newcomer cases in 2021. Seat CRPS 0.4031 without newcomers, 0.3854 with (paired difference -0.018, 90% bootstrap interval -0.031 to -0.007), and 90% coverage 87.7%: condition (1) holds. Check C20 for 2026: no council's median newcomer total exceeds the historical 95th percentile (21.1%): condition (2) holds. C21: no coefficient differs by more than two standard errors between the 2016-only and pooled fits; the nearest is ward coverage (1.38 against 2.35, z -1.9). Also improved, outside the rule: council control (Brier 0.308 to 0.212; 22 councils right rather than 20), and seats won by parties the model could not see (46 to 0). Ward scores are unchanged.
+
+*A regime difference the backtest cannot test.* The 2016-only fit finds no party-level correlation (rho 0: too few parties stood in several councils in 2016); the pooled fit used for 2026 has rho 0.33. Rho does not change any single council's distribution, which is all the seat scores measure, but it widens the uncertainty of a wide party's total across councils. This is the L043 lesson in a milder form: recorded, and not a failure of the rule.
+
+**Decision, following the L044 order:** the premium experiment changed the configuration, so the newcomer test is rerun at `premium_basis: interpolated`, with `entrants` still false. If the rerun's `adopt` is TRUE and C20 still passes, the module is switched on; otherwise it stays off.
 
 **L044. Newcomer model v2 and a premium-basis experiment: built, with both rules fixed before any result.** Nothing in this entry was written after a backtest or forecast result from this code had been read.
 

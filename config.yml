@@ -26,10 +26,11 @@ model:
   transfer_b: one
   ward_ratio: false
   premium_shrink: 0.5
-  # Premium basis (O10, L044): compare the local vote with the earlier national
-  # vote ("earlier"), or with the national vote interpolated to the local
-  # election's date ("interpolated"). Chosen by the pre-registered backtest.
-  premium_basis: earlier
+  # Premium basis (O10): compare the local vote with the earlier national vote
+  # ("earlier"), or with the national vote interpolated to the local election's
+  # date ("interpolated"). Chosen by the pre-registered 2021 backtest (L044-L045):
+  # seat CRPS 0.4014 against 0.4050, ward Brier 0.151 against 0.157.
+  premium_basis: interpolated
   sd:                        # shocks on the log-share scale (A02)
     # Chosen by the pre-registered 2021 backtest (MODEL-LOG L027-L028): lowest
     # seat CRPS among 24 settings with 90% coverage in [0.80, 0.97]. Formerly

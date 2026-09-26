@@ -416,20 +416,33 @@ ward_diagnostics <- function(sc, naive_prev, naive_nat) {
 backtest_premium_grid <- function(bt, cfg, n_draws = 400) {
   actual <- bt$truth$pr |> summarise(votes = sum(votes), .by = party) |> mutate(share = votes / sum(votes))
   cur_shrink <- cfg$model$premium_shrink %||% 1
-  g <- tidyr::expand_grid(premium_basis = c("earlier", "interpolated"), shrink = sort(unique(c(cur_shrink, 1)))) |>
-    pmap_dfr(\(premium_basis, shrink) {
+  runs <- tidyr::expand_grid(premium_basis = c("earlier", "interpolated"), shrink = sort(unique(c(cur_shrink, 1)))) |>
+    pmap(\(premium_basis, shrink) {
       prep <- prepare_chain(bt$inputs, cfg, "fitted", shrink = shrink, premium_basis = premium_basis)
       ch <- simulate_chain(prep, cfg, n_draws)
       sc <- score_chain(ch, bt$truth)
       ps <- province_vote_share(ch$sims, prep$baseline)
       # named share_of, not pick: inside mutate() dplyr's own pick() would win
       share_of <- \(t, p) { i <- match(p, t$party); if (is.na(i)) NA_real_ else t$median[i] }
-      mutate(sc$summary, premium_basis = premium_basis, shrink = shrink,
+      list(summary = mutate(sc$summary, premium_basis = premium_basis, shrink = shrink,
              da_pred = share_of(ps, "DEMOCRATIC ALLIANCE"), da_actual = share_of(actual |> rename(median = share), "DEMOCRATIC ALLIANCE"),
              anc_pred = share_of(ps, "AFRICAN NATIONAL CONGRESS"), anc_actual = share_of(actual |> rename(median = share), "AFRICAN NATIONAL CONGRESS"),
-             .before = 1)
+             .before = 1),
+           seats = select(sc$seats, muni_code, party, crps))
     })
+  g <- bind_rows(map(runs, "summary"))
   cur <- g$premium_basis == (cfg$model$premium_basis %||% "earlier") & g$shrink == cur_shrink
+  # Reported, not part of the rule (added in L045, after the rule had been
+  # applied once): each variant's paired difference in seat CRPS from the
+  # current model, with a 90% bootstrap interval over councils, as for the
+  # newcomer test. The variants share random numbers, so the pairing is exact.
+  ref <- runs[[which(cur)]]$seats
+  g <- bind_cols(g, bind_rows(map(runs, \(r) {
+    d <- inner_join(rename(ref, c0 = crps), rename(r$seats, c1 = crps), by = c("muni_code", "party")) |>
+      summarise(diff = sum(c1 - c0), n = n(), .by = muni_code)
+    b <- withr::with_seed(1, replicate(2000, { i <- sample.int(nrow(d), replace = TRUE); sum(d$diff[i]) / sum(d$n[i]) }))
+    tibble(crps_diff = sum(d$diff) / sum(d$n), crps_diff_lo = unname(quantile(b, 0.05)), crps_diff_hi = unname(quantile(b, 0.95)))
+  })))
   g |> mutate(current = cur,
               eligible = pit_cov90 >= 0.80 & pit_cov90 <= 0.97 & ward_brier <= ward_brier[cur] + 0.005,
               best = eligible & seat_crps == if (any(eligible)) min(seat_crps[eligible]) else -Inf,
